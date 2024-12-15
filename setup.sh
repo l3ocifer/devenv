@@ -255,11 +255,22 @@ main() {
     else
         log "Updating devenv repository..."
         (cd ~/git/devenv && {
-            # Check for local changes
-            if git status --porcelain | grep -q '^[MADRCU]'; then
-                log "Local changes detected, committing changes..."
-                git add .
+            # Check for any changes (including untracked files)
+            if ! git diff-index --quiet HEAD -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+                log "Local changes detected, committing and pushing changes..."
+                git add -A  # Stage all changes, including untracked files
                 git commit -m "local changes before update $(date +%Y%m%d_%H%M%S)"
+                # Try to push changes
+                if git push origin master; then
+                    success "Successfully pushed local changes"
+                else
+                    warn "Could not push changes. Will create a backup branch"
+                    local backup_branch="backup_$(date +%Y%m%d_%H%M%S)"
+                    git branch "$backup_branch"
+                    log "Created backup branch: $backup_branch"
+                fi
+            else
+                log "No local changes detected"
             fi
             # Update from remote
             git pull --rebase || error "Failed to update from remote"
