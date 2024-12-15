@@ -6,5 +6,5 @@
       ansible.builtin.include_role:
         name: ansible-role-personal
       vars:
-        git_user_name: "Test User"
-        git_user_email: "test@example.com"
+        git_user_name: "l3ocifer"
+        git_user_email: "lpask001@gmail.com

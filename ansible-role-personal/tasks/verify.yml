@@ -1,33 +1,30 @@
 ---
 # Verify essential directories and files
 - name: Verify essential directories exist
-  stat:
-    path: "{{ item | expanduser }}"
+  ansible.builtin.stat:
+    path: "{{ item }}"
   register: dir_check
-  failed_when: not dir_check.stat.exists
-  with_items:
-    - "{{ git_base_dir }}"
-    - "{{ devenv_dir }}"
-    - "{{ scripts_dir }}"
-    - "~/.config/personal"
+  loop:
     - "~/.config/git"
     - "~/.config/git/includes"
-    - "~/.config/zsh"
+    - "~/.config/personal"
     - "~/.config/syncthing"
-    - "{{ ssh_config_dir }}"
+    - "~/git"
+    - "~/.scripts"
+  failed_when: not dir_check.stat.exists
   tags: ['verify', 'directories']
 
 - name: Verify essential files exist
-  stat:
-    path: "{{ item | expanduser }}"
+  ansible.builtin.stat:
+    path: "{{ item }}"
   register: file_check
-  failed_when: not file_check.stat.exists
-  with_items:
-    - "~/.config/personal/.git/config"
-    - "~/.config/git/config"
+  loop:
+    - "~/.config/git/includes/gitconfig-personal"
+    - "~/.config/git/includes/gitconfig-provisions"
     - "~/.ssh/config"
     - "~/.config/syncthing/config.xml"
     - "~/.zshrc"
+  failed_when: not file_check.stat.exists
   tags: ['verify', 'files']
 
 - name: Verify Syncthing is running

@@ -8,8 +8,9 @@
         path: "{{ item }}"
       register: dir_check
       loop:
-        - "~/.config/syncthing"
         - "~/.config/git"
+        - "~/.config/git/includes"
+        - "~/.config/syncthing"
         - "~/git"
 
     - name: Verify directories exist
@@ -18,5 +19,6 @@
           - dir_check.results[0].stat.exists
           - dir_check.results[1].stat.exists
           - dir_check.results[2].stat.exists
+          - dir_check.results[3].stat.exists
         fail_msg: "Required directories are missing"
         success_msg: "All required directories exist"
