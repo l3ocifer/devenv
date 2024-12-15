@@ -254,7 +254,16 @@ main() {
         git clone https://github.com/l3ocifer/devenv.git ~/git/devenv || error "Failed to clone devenv repository"
     else
         log "Updating devenv repository..."
-        (cd ~/git/devenv && git stash && git pull && git stash pop) || error "Failed to update devenv repository"
+        (cd ~/git/devenv && {
+            # Check for local changes
+            if git status --porcelain | grep -q '^[MADRCU]'; then
+                log "Local changes detected, committing changes..."
+                git add .
+                git commit -m "local changes before update $(date +%Y%m%d_%H%M%S)"
+            fi
+            # Update from remote
+            git pull --rebase || error "Failed to update from remote"
+        }) || error "Failed to update devenv repository"
     fi
 
     # Run Ansible playbook
