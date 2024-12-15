@@ -45,32 +45,30 @@
 
 - name: Check Oh My Zsh installation
   stat:
-    path: "{{ '~/.oh-my-zsh' | expanduser }}"
+    path: "{{ oh_my_zsh_custom }}"
   register: omz_stat
   tags: ['shell']
 
 - name: Install Oh My Zsh
   git:
     repo: https://github.com/ohmyzsh/ohmyzsh.git
-    dest: "{{ '~/.oh-my-zsh' | expanduser }}"
+    dest: "{{ oh_my_zsh_custom }}"
     depth: 1
   when: not omz_stat.stat.exists
   tags: ['shell']
 
 - name: Check Zsh plugins
   stat:
-    path: "{{ '~/.oh-my-zsh/custom/plugins/' | expanduser }}{{ item.name }}"
+    path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
   register: "plugin_stat"
-  with_items:
-    - { name: zsh-autosuggestions, repo: https://github.com/zsh-users/zsh-autosuggestions.git }
-    - { name: zsh-syntax-highlighting, repo: https://github.com/zsh-users/zsh-syntax-highlighting.git }
+  with_items: "{{ zsh_plugins }}"
   tags: ['shell']
   no_log: true
 
 - name: Install Zsh plugins
   git:
     repo: "{{ item.item.repo }}"
-    dest: "{{ '~/.oh-my-zsh/custom/plugins/' | expanduser }}{{ item.item.name }}"
+    dest: "{{ oh_my_zsh_custom }}/plugins/{{ item.item.name }}"
     depth: 1
   when: not item.stat.exists
   loop: "{{ plugin_stat.results }}"

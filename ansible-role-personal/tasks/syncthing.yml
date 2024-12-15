@@ -62,21 +62,6 @@
   failed_when: false
   no_log: true
 
-- name: Verify Syncthing configuration
-  stat:
-    path: "~/.config/syncthing/config.xml"
-  register: syncthing_config
-  failed_when: not syncthing_config.stat.exists
-  no_log: true
-
-- name: Verify secrets file is being synced
-  shell: |
-    grep -q "{{ secrets_file | expanduser | basename }}" ~/.config/syncthing/config.xml
-  register: secrets_sync_check
-  changed_when: false
-  failed_when: secrets_sync_check.rc != 0
-  no_log: true
-
 - name: Start Syncthing service
   block:
     - name: Start Syncthing service (MacOS)

@@ -131,6 +131,14 @@ cli_tools:
       - "grafana"
       - "loki"    # Log aggregation
 
+# Zsh Configuration
+oh_my_zsh_custom: "{{ '~/.oh-my-zsh' | expanduser }}"
+zsh_plugins:
+  - name: zsh-autosuggestions
+    repo: https://github.com/zsh-users/zsh-autosuggestions.git
+  - name: zsh-syntax-highlighting
+    repo: https://github.com/zsh-users/zsh-syntax-highlighting.git
+
 # AI Configuration
 ai_model_name: llama3.2:3b
 ai_theme: dark

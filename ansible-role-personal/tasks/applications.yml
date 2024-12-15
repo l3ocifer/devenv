@@ -23,7 +23,6 @@
     path: "/Applications/{{ item.name }}.app"
   loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list }}"
   register: mas_app_check
-  no_log: true
   tags: ['mas']
 
 - name: Install Mac App Store applications
@@ -51,7 +50,6 @@
     path: "/Applications/{{ item.name }}.app"
   loop: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
   register: app_check
-  no_log: true
   loop_control:
     label: "{{ item.name }}"
   tags: ['apps']
@@ -411,24 +409,3 @@
   changed_when: ollama_pull.rc == 0
   when: is_macos and model_check.rc != 0
   tags: ['ai']
-
-# Zsh plugins
-- name: Check if Zsh plugins exist
-  stat:
-    path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
-  with_items: "{{ zsh_plugins }}"
-  register: zsh_plugins_check
-  no_log: true
-  loop_control:
-    label: "{{ item.name }}"
-  tags: ['zsh']
-
-- name: Install Zsh plugins
-  git:
-    repo: "{{ item.item.repo }}"
-    dest: "{{ oh_my_zsh_custom }}/plugins/{{ item.item.name }}"
-    depth: 1
-  with_items: "{{ zsh_plugins_check.results }}"
-  when: not item.stat.exists
-  no_log: "{{ not ansible_verbosity | bool }}"
-  tags: ['zsh']
