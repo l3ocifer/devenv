@@ -1,16 +1,29 @@
 ---
+- name: Check if dotfiles directory exists
+  stat:
+    path: "~/dotfiles"
+  register: dotfiles_stat
+  tags: ['dotfiles']
+
 - name: Ensure dotfiles directory exists
   file:
     path: "~/dotfiles"
     state: directory
     mode: '0755'
+  when: not dotfiles_stat.stat.exists
+  tags: ['dotfiles']
+
+- name: Check if dotfiles git repo exists
+  stat:
+    path: "~/dotfiles/.git"
+  register: dotfiles_git_stat
   tags: ['dotfiles']
 
 - name: Initialize dotfiles git repository if not exists
   command: git init
   args:
     chdir: "~/dotfiles"
-    creates: "~/dotfiles/.git"
+  when: not dotfiles_git_stat.stat.exists
   tags: ['dotfiles']
 
 - name: Configure dotfiles remote
@@ -21,11 +34,10 @@
   failed_when: add_remote.rc != 0 and "remote origin already exists" not in add_remote.stderr
   tags: ['dotfiles']
 
-- name: Copy dotfiles
-  copy:
-    src: "{{ item.src }}"
-    dest: "~/dotfiles/{{ item.dest }}"
-    mode: "{{ item.mode | default('0644') }}"
+- name: Check existing dotfiles
+  stat:
+    path: "~/dotfiles/{{ item.dest }}"
+  register: "existing_dotfiles"
   with_items:
     - { src: "templates/inputrc.j2", dest: ".inputrc" }
     - { src: "templates/zshrc.j2", dest: ".zshrc" }
@@ -33,11 +45,35 @@
     - { src: "templates/gitconfig-provisions.j2", dest: ".gitconfig-provisions" }
   tags: ['dotfiles']
 
+- name: Copy dotfiles
+  template:
+    src: "{{ item.item.src }}"
+    dest: "~/dotfiles/{{ item.item.dest }}"
+    mode: "{{ item.item.mode | default('0644') }}"
+    backup: yes
+    force: no
+  loop: "{{ existing_dotfiles.results }}"
+  when: not item.stat.exists
+  tags: ['dotfiles']
+
+- name: Check git hooks directory
+  stat:
+    path: "~/dotfiles/.git/hooks"
+  register: hooks_stat
+  tags: ['dotfiles']
+
 - name: Create git hooks directory
   file:
     path: "~/dotfiles/.git/hooks"
     state: directory
     mode: '0755'
+  when: not hooks_stat.stat.exists
+  tags: ['dotfiles']
+
+- name: Check post-commit hook
+  stat:
+    path: "~/dotfiles/.git/hooks/post-commit"
+  register: post_commit_stat
   tags: ['dotfiles']
 
 - name: Install post-commit hook
@@ -45,19 +81,30 @@
     src: post-commit.j2
     dest: "~/dotfiles/.git/hooks/post-commit"
     mode: '0755'
+    backup: yes
+    force: no
+  when: not post_commit_stat.stat.exists
   tags: ['dotfiles']
 
-- name: Create symlinks
-  file:
-    src: "~/dotfiles/{{ item }}"
-    dest: "~/{{ item }}"
-    state: link
-    force: yes
+- name: Check existing symlinks
+  stat:
+    path: "~/{{ item.dest }}"
+  register: "existing_symlinks"
   with_items:
     - .inputrc
     - .zshrc
     - .gitconfig
     - .gitconfig-provisions
+  tags: ['dotfiles']
+
+- name: Create symlinks
+  file:
+    src: "~/dotfiles/{{ item.item.dest }}"
+    dest: "~/{{ item.item.dest }}"
+    state: link
+    force: no
+  loop: "{{ existing_symlinks.results }}"
+  when: not item.stat.exists
   tags: ['dotfiles']
 
 - name: Configure git for dotfiles

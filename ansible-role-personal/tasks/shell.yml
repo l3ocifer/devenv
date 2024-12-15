@@ -1,12 +1,36 @@
 ---
+- name: Ensure zsh config directory exists
+  file:
+    path: ~/.config/zsh
+    state: directory
+    mode: '0755'
+  tags: ['shell']
+
+- name: Check existing shell configuration files
+  stat:
+    path: "~/.config/zsh/{{ item }}"
+  register: "shell_config_stat"
+  with_items:
+    - aliases
+    - exports
+  tags: ['shell']
+
 - name: Create shell configuration files
   template:
     src: "{{ item }}.j2"
     dest: "~/.config/zsh/{{ item }}"
     mode: '0644'
+    backup: yes
+    force: no
   with_items:
     - aliases
     - exports
+  tags: ['shell']
+
+- name: Check existing zshrc
+  stat:
+    path: ~/.zshrc
+  register: zshrc_stat
   tags: ['shell']
 
 - name: Configure .zshrc
@@ -14,6 +38,15 @@
     src: zshrc.j2
     dest: ~/.zshrc
     mode: '0644'
+    backup: yes
+    force: no
+  when: not zshrc_stat.stat.exists
+  tags: ['shell']
+
+- name: Check Oh My Zsh installation
+  stat:
+    path: ~/.oh-my-zsh
+  register: omz_stat
   tags: ['shell']
 
 - name: Install Oh My Zsh
@@ -21,14 +54,23 @@
     repo: https://github.com/ohmyzsh/ohmyzsh.git
     dest: ~/.oh-my-zsh
     depth: 1
+  when: not omz_stat.stat.exists
+  tags: ['shell']
+
+- name: Check Zsh plugins
+  stat:
+    path: "~/.oh-my-zsh/custom/plugins/{{ item.name }}"
+  register: "plugin_stat"
+  with_items:
+    - { name: zsh-autosuggestions, repo: https://github.com/zsh-users/zsh-autosuggestions.git }
+    - { name: zsh-syntax-highlighting, repo: https://github.com/zsh-users/zsh-syntax-highlighting.git }
   tags: ['shell']
 
 - name: Install Zsh plugins
   git:
-    repo: "{{ item.repo }}"
-    dest: "~/.oh-my-zsh/custom/plugins/{{ item.name }}"
+    repo: "{{ item.item.repo }}"
+    dest: "~/.oh-my-zsh/custom/plugins/{{ item.item.name }}"
     depth: 1
-  with_items:
-    - { name: zsh-autosuggestions, repo: https://github.com/zsh-users/zsh-autosuggestions.git }
-    - { name: zsh-syntax-highlighting, repo: https://github.com/zsh-users/zsh-syntax-highlighting.git }
+  when: not item.stat.exists
+  loop: "{{ plugin_stat.results }}"
   tags: ['shell']
