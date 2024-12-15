@@ -41,7 +41,7 @@
   with_items: >-
     {{
       ssh_keys | default([]) |
-      reject('search', '.*\.pub$') |
+      reject('search', '\.pub$') |
       list
     }}
   when: ssh_keys | length > 0
