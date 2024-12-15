@@ -109,9 +109,21 @@
 # Ruby Setup
 - name: Setup Ruby
   block:
-    - name: Install rbenv on Linux
+    - name: Install Ruby build dependencies on Linux
       package:
-        name: rbenv
+        name:
+          - rbenv
+          - libffi-dev
+          - libssl-dev
+          - libreadline-dev
+          - zlib1g-dev
+          - autoconf
+          - bison
+          - build-essential
+          - libyaml-dev
+          - libreadline6-dev
+          - libncurses5-dev
+          - libgdbm-dev
         state: present
       become: true
       when: is_linux
@@ -144,6 +156,7 @@
     - name: Install Ruby version
       shell: |
         eval "$(rbenv init -)"
+        export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@1.1 2>/dev/null || echo '/usr')"
         rbenv install {{ languages.ruby.version | default('3.2.2') }} -s || rbenv install 3.2.2 -s
         rbenv global {{ languages.ruby.version | default('3.2.2') }} || rbenv global 3.2.2
       args:
