@@ -9,8 +9,10 @@
 - name: Copy SSH configuration
   template:
     src: ssh_config.j2
-    dest: "{{ ssh_config_dir }}/config"
+    dest: "{{ ssh_config_dir | expanduser }}/config"
     mode: '0600'
+    backup: yes
+  when: ansible_os_family == 'Darwin'
   tags: ['ssh']
 
 - name: Copy SSH keys from secrets

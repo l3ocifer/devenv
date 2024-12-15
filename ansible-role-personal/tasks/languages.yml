@@ -14,6 +14,12 @@
   tags: ['languages']
 
 # Rust Installation and Update
+- name: Check if Rust is installed
+  stat:
+    path: "{{ '~/.cargo/bin/rustc' | expanduser }}"
+  register: rust_check
+  tags: ['languages']
+
 - name: Install/Update Rust via rustup
   shell: |
     if ! command -v rustup &> /dev/null; then
@@ -22,10 +28,17 @@
       rustup update
     fi
   args:
-    creates: "{{ ansible_env.HOME }}/.cargo/bin/rustc"
+    creates: "{{ '~/.cargo/bin/rustc' | expanduser }}"
+  when: not rust_check.stat.exists
   tags: ['languages']
 
 # Python Setup via Miniconda
+- name: Check if Miniconda is installed
+  stat:
+    path: "{{ '~/miniconda3/bin/conda' | expanduser }}"
+  register: conda_check
+  tags: ['languages']
+
 - name: Install miniconda
   block:
     - name: Download miniconda installer
@@ -33,33 +46,56 @@
         url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-{{ 'MacOSX' if is_macos else 'Linux' }}-{{ 'arm64' if ansible_architecture == 'arm64' else 'x86_64' }}.sh"
         dest: "/tmp/miniconda.sh"
         mode: '0755'
-      when: not ansible_check_mode
+      when: not ansible_check_mode and not conda_check.stat.exists
     
     - name: Run miniconda installer
-      shell: /tmp/miniconda.sh -b -p {{ ansible_env.HOME }}/miniconda3
+      shell: /tmp/miniconda.sh -b -p {{ '~/miniconda3' | expanduser }}
       args:
-        creates: "{{ ansible_env.HOME }}/miniconda3/bin/conda"
-      when: not ansible_check_mode
+        creates: "{{ '~/miniconda3/bin/conda' | expanduser }}"
+      when: not ansible_check_mode and not conda_check.stat.exists
+    
+    - name: Initialize conda in shell
+      shell: |
+        {{ '~/miniconda3/bin/conda' | expanduser }} init zsh
+      args:
+        creates: "{{ '~/.zshrc.pre-conda' | expanduser }}"
+      when: not ansible_check_mode and not conda_check.stat.exists
     
     - name: Install Python packages
       pip:
-        name: "{{ languages.python.packages }}"
+        name: "{{ item }}"
         state: latest
+        executable: "{{ '~/miniconda3/bin/pip' | expanduser }}"
       environment:
-        PATH: "{{ ansible_env.HOME }}/miniconda3/bin:{{ ansible_env.PATH }}"
+        PATH: "{{ '~/miniconda3/bin' | expanduser }}:{{ ansible_env.PATH }}"
+      loop: "{{ languages.python.packages | default([]) }}"
+      when: languages.python.packages is defined
   tags: ['languages']
 
 # Node.js Setup
+- name: Check if nvm is installed
+  stat:
+    path: "{{ '~/.nvm/nvm.sh' | expanduser }}"
+  register: nvm_check
+  tags: ['languages']
+
+- name: Install nvm
+  shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+  args:
+    creates: "{{ '~/.nvm/nvm.sh' | expanduser }}"
+  when: not nvm_check.stat.exists
+  tags: ['languages']
+
 - name: Install Node.js via nvm
   shell: |
-    export NVM_DIR="$HOME/.nvm"
+    export NVM_DIR="{{ '~/.nvm' | expanduser }}"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    nvm install {{ languages.node.version }}
-    nvm alias default {{ languages.node.version }}
-    npm install -g {{ languages.node.packages | join(' ') }}
+    nvm install --lts
+    nvm use --lts
   args:
     executable: /bin/bash
-    creates: "{{ ansible_env.HOME }}/.nvm/versions/node/v{{ languages.node.version }}"
+  when: not nvm_check.stat.exists
   tags: ['languages']
 
 # Ruby Setup

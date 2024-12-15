@@ -2,7 +2,7 @@
 # Directory setup
 - name: Ensure Git directories exist
   file:
-    path: "{{ item }}"
+    path: "{{ item | expanduser }}"
     state: directory
     mode: '0755'
   with_items:
@@ -19,8 +19,8 @@
     scope: global
     value: "{{ item.value }}"
   loop:
-    - { name: 'user.name', value: '{{ git_user_name }}' }
-    - { name: 'user.email', value: '{{ git_user_email }}' }
+    - { name: 'user.name', value: '{{ git_user_name | default("l3ocifer") }}' }
+    - { name: 'user.email', value: '{{ git_user_email | default("lpask001@gmail.com") }}' }
     - { name: 'http.postBuffer', value: '524288000' }
     - { name: 'credential.helper', value: 'cache --timeout=604800' }
     - { name: 'core.autocrlf', value: 'input' }
@@ -30,12 +30,24 @@
   tags: ['git']
 
 # Configure Git SSH command
-- name: Configure Git SSH command for ED25519 key
+- name: Check for SSH keys in secrets
+  set_fact:
+    available_ssh_keys: "{{ ssh_keys | default([]) | map(attribute='name') | list }}"
+  tags: ['git']
+
+- name: Configure Git SSH command
   git_config:
     name: core.sshCommand
     scope: global
-    value: "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
-  when: ssh_keys | selectattr('name', 'equalto', 'id_ed25519') | list | length > 0
+    value: >-
+      ssh -i {{ '~/.ssh/leo-personal' | expanduser }}
+      {% for key in ssh_keys | default([]) %}
+      {% if key.name != 'leo-personal' %}
+      -i {{ '~/.ssh/' ~ key.name | expanduser }}
+      {% endif %}
+      {% endfor %}
+      -o IdentitiesOnly=yes
+  when: "'leo-personal' in available_ssh_keys"
   tags: ['git']
 
 # Configure Git to use SSH by default
@@ -44,43 +56,37 @@
     name: url.{{ item.replace }}.insteadOf
     scope: global
     value: "{{ item.match }}"
-  loop: "{{ git_url_rewrites }}"
+  loop: "{{ git_url_rewrites | default([
+    {'match': 'https://github.com/', 'replace': 'git@github.com:'},
+    {'match': 'https://dev.azure.com/', 'replace': 'git@ssh.dev.azure.com:v3/'},
+    {'match': 'https://bitbucket.org/', 'replace': 'git@bitbucket.org:'}
+  ]) }}"
   tags: ['git']
 
 # Client-specific git configurations
 - name: Create client-specific git configs
   template:
-    src: "gitconfig-{{ item.name }}.j2"
-    dest: "~/.gitconfig-{{ item.name }}"
+    src: "gitconfig-{{ item }}.j2"
+    dest: "{{ '~/.config/git/includes/gitconfig-' | expanduser }}{{ item }}"
     mode: '0644'
-  loop: "{{ git_clients | default([]) }}"
-  when: git_clients is defined
+    backup: yes
+    force: no
+  loop: "{{ git_client_configs | default([]) }}"
   tags: ['git']
 
-# Create provisions git config
-- name: Create provisions git config
-  template:
-    src: templates/gitconfig-provisions.j2
-    dest: ~/.gitconfig-provisions
-    mode: '0644'
-  when: create_provisions_config | default(false)
-  tags: ['git']
-
-# Repository setup
+# Clone repositories
 - name: Clone or update devenv repository
   git:
     repo: "{{ devenv_repo }}"
-    dest: "{{ devenv_dir }}"
-    version: master
-    force: yes
+    dest: "{{ devenv_dir | expanduser }}"
     update: yes
+    force: no
   tags: ['git']
 
 - name: Clone or update scripts repository
   git:
     repo: "{{ scripts_repo }}"
-    dest: "{{ scripts_dir }}"
-    version: master
-    force: yes
+    dest: "{{ scripts_dir | expanduser }}"
     update: yes
+    force: no
   tags: ['git']

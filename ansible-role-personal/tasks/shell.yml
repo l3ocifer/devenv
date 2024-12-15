@@ -1,14 +1,14 @@
 ---
 - name: Ensure zsh config directory exists
   file:
-    path: ~/.config/zsh
+    path: "{{ '~/.config/zsh' | expanduser }}"
     state: directory
     mode: '0755'
   tags: ['shell']
 
 - name: Check existing shell configuration files
   stat:
-    path: "~/.config/zsh/{{ item }}"
+    path: "{{ '~/.config/zsh/' | expanduser }}{{ item }}"
   register: "shell_config_stat"
   with_items:
     - aliases
@@ -18,7 +18,7 @@
 - name: Create shell configuration files
   template:
     src: "{{ item }}.j2"
-    dest: "~/.config/zsh/{{ item }}"
+    dest: "{{ '~/.config/zsh/' | expanduser }}{{ item }}"
     mode: '0644'
     backup: yes
     force: no
@@ -29,14 +29,14 @@
 
 - name: Check existing zshrc
   stat:
-    path: ~/.zshrc
+    path: "{{ '~/.zshrc' | expanduser }}"
   register: zshrc_stat
   tags: ['shell']
 
 - name: Configure .zshrc
   template:
     src: zshrc.j2
-    dest: ~/.zshrc
+    dest: "{{ '~/.zshrc' | expanduser }}"
     mode: '0644'
     backup: yes
     force: no
@@ -45,21 +45,21 @@
 
 - name: Check Oh My Zsh installation
   stat:
-    path: ~/.oh-my-zsh
+    path: "{{ '~/.oh-my-zsh' | expanduser }}"
   register: omz_stat
   tags: ['shell']
 
 - name: Install Oh My Zsh
   git:
     repo: https://github.com/ohmyzsh/ohmyzsh.git
-    dest: ~/.oh-my-zsh
+    dest: "{{ '~/.oh-my-zsh' | expanduser }}"
     depth: 1
   when: not omz_stat.stat.exists
   tags: ['shell']
 
 - name: Check Zsh plugins
   stat:
-    path: "~/.oh-my-zsh/custom/plugins/{{ item.name }}"
+    path: "{{ '~/.oh-my-zsh/custom/plugins/' | expanduser }}{{ item.name }}"
   register: "plugin_stat"
   with_items:
     - { name: zsh-autosuggestions, repo: https://github.com/zsh-users/zsh-autosuggestions.git }
@@ -69,7 +69,7 @@
 - name: Install Zsh plugins
   git:
     repo: "{{ item.item.repo }}"
-    dest: "~/.oh-my-zsh/custom/plugins/{{ item.item.name }}"
+    dest: "{{ '~/.oh-my-zsh/custom/plugins/' | expanduser }}{{ item.item.name }}"
     depth: 1
   when: not item.stat.exists
   loop: "{{ plugin_stat.results }}"
