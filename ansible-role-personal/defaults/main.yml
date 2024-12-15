@@ -36,13 +36,16 @@ macos_apps:
   - { name: "Google Chrome", brew: "google-chrome" }
   - { name: "Brave Browser", brew: "brave-browser" }
   - { name: "Thunderbird", brew: "thunderbird" }
+
+# Mac App Store Applications
+macos_mas_apps:
   - { name: "ChatGPT", id: "6448311069" }
   - { name: "Claude", id: "6470116884" }
+  - { name: "TestFlight", id: "899247664" }
+  - { name: "WYZE", id: "1288415553" }
   
   # System Tools
   - { name: "Alacritty", brew: "alacritty" }
-  - { name: "TestFlight", id: "899247664" }
-  - { name: "WYZE", id: "1288415553" }
   - { name: "OBS", brew: "obs" }
   - { name: "VLC", brew: "vlc" }
   - { name: "Miniconda", brew: "miniconda" }

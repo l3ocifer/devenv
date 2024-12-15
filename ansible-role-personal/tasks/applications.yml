@@ -377,7 +377,18 @@
     content: "{{ item.item.key }}"
     dest: "~/.ssh/{{ item.item.name }}"
     mode: "{{ item.item.mode }}"
+    force: no
   with_items: "{{ ssh_keys_check.results }}"
   when: not item.stat.exists
   no_log: true
+  register: ssh_keys_added
+  changed_when: ssh_keys_added.changed
+  tags: ['ssh']
+
+- name: Display SSH key status
+  debug:
+    msg: "SSH key {{ item.item.name }} {{ 'added' if item.changed else 'already exists' }}"
+  with_items: "{{ ssh_keys_check.results }}"
+  when: not ansible_check_mode
+  no_log: false
   tags: ['ssh']
