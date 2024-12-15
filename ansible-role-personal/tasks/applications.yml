@@ -18,6 +18,7 @@
   with_items: "{{ macos_apps | selectattr('id', 'defined') | list }}"
   when: is_macos
   tags: ['apps']
+  no_log: "{{ not ansible_verbosity | bool }}"
 
 - name: Check Mac App Store registration
   shell: "mas list | awk '{print $1}' | grep -x '{{ item.item.id }}' || true"
@@ -37,21 +38,19 @@
   ignore_errors: yes
   tags: ['apps']
 
-# Ensure required directories exist
-- name: Create application config directories
+# Ensure config directories exist
+- name: Ensure config directories exist
   file:
     path: "{{ item }}"
     state: directory
     mode: '0755'
-  with_items:
+  loop:
     - "~/.config/personal/cursor"
     - "~/.config/personal/zed"
+    - "~/.config/personal/windsurf"
     - "~/.config/personal/pulsar"
     - "~/.config/personal/logseq"
-    - "~/.config/cursor"
-    - "~/.config/zed"
-    - "~/.config/pulsar"
-    - "~/.logseq"
+  when: is_macos
   tags: ['apps']
 
 # Copy application templates
@@ -63,8 +62,26 @@
   with_items:
     - { src: "cursor/settings.json.j2", dest: "~/.config/personal/cursor/settings.json" }
     - { src: "zed/settings.json.j2", dest: "~/.config/personal/zed/settings.json" }
+    - { src: "windsurf/settings.json.j2", dest: "~/.config/personal/windsurf/settings.json" }
     - { src: "pulsar/config.cson.j2", dest: "~/.config/personal/pulsar/config.cson" }
     - { src: "logseq/config.edn.j2", dest: "~/.config/personal/logseq/config.edn" }
+  when: is_macos
+  tags: ['apps']
+
+# Create symlinks for application configs
+- name: Create symlinks for application configs
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: yes
+  loop:
+    - { src: "~/.config/personal/cursor/settings.json", dest: "~/Library/Application Support/Cursor/User/settings.json" }
+    - { src: "~/.config/personal/zed/settings.json", dest: "~/Library/Application Support/Zed/settings/settings.json" }
+    - { src: "~/.config/personal/windsurf/settings.json", dest: "~/Library/Application Support/Windsurf/config/settings.json" }
+    - { src: "~/.config/personal/pulsar/config.cson", dest: "~/.pulsar/config.cson" }
+    - { src: "~/.config/personal/logseq/config.edn", dest: "~/.logseq/config.edn" }
+  when: is_macos
   tags: ['apps']
 
 # Homebrew Cask Applications
@@ -97,20 +114,6 @@
     msg: "Please manually install {{ item.name }} from {{ item.url }}"
   with_items: "{{ macos_apps | selectattr('url', 'defined') | list }}"
   when: is_macos
-  tags: ['apps']
-
-# Ensure application configurations are properly linked
-- name: Setup application symlinks
-  file:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    state: link
-    force: yes
-  with_items:
-    - { src: "~/.config/personal/cursor/settings.json", dest: "~/.config/cursor/settings.json" }
-    - { src: "~/.config/personal/zed/settings.json", dest: "~/.config/zed/settings.json" }
-    - { src: "~/.config/personal/pulsar/config.cson", dest: "~/.config/pulsar/config.cson" }
-    - { src: "~/.config/personal/logseq/config.edn", dest: "~/.logseq/config.edn" }
   tags: ['apps']
 
 # CLI Tools Installation
