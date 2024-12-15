@@ -102,7 +102,7 @@ run_platform_tests() {
     if [ ! -d "$test_dir" ]; then
         echo -e "${RED}Failed to create temporary directory${NC}"
         return 1
-    }
+    fi
     
     script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     
