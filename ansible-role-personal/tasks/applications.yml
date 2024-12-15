@@ -17,7 +17,6 @@
   with_items: "{{ macos_mas_apps }}"
   register: mas_app_check
   when: is_macos
-  no_log: "{{ not ansible_verbosity | bool }}"
   tags: ['apps']
 
 - name: Check Mac App Store registration
@@ -365,11 +364,20 @@
   tags: ['zsh']
 
 # SSH Keys
-- name: Add private SSH keys to agent
-  copy:
-    content: "{{ item.key }}"
-    dest: "~/.ssh/{{ item.name }}"
-    mode: "{{ item.mode }}"
+- name: Check if SSH keys exist
+  stat:
+    path: "~/.ssh/{{ item.name }}"
   with_items: "{{ ssh_keys }}"
+  register: ssh_keys_check
+  no_log: true
+  tags: ['ssh']
+
+- name: Add private SSH keys
+  copy:
+    content: "{{ item.item.key }}"
+    dest: "~/.ssh/{{ item.item.name }}"
+    mode: "{{ item.item.mode }}"
+  with_items: "{{ ssh_keys_check.results }}"
+  when: not item.stat.exists
   no_log: true
   tags: ['ssh']
