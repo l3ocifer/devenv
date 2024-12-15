@@ -36,6 +36,5 @@
     if ! ssh-add -l | grep -q "{{ item.name }}"; then
       ssh-add {{ ssh_config_dir }}/{{ item.name }}
     fi
-  with_items: "{{ ssh_keys | default([]) | selectattr('name', 'match', '.*(?<!\.pub)$') | list }}"
-  when: not item.name.endswith('.pub')
+  with_items: "{{ ssh_keys | default([]) | rejectattr('name', 'search', '\.pub$') | list }}"
   tags: ['ssh']

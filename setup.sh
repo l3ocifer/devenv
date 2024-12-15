@@ -155,8 +155,8 @@ aws_default_region: ""
 homebrew_github_api_token: ""  # Optional, for higher rate limits
 
 # Paths
-scripts_repo: "git@github.com:yourusername/scripts.git"
-devenv_repo: "git@github.com:yourusername/devenv.git"
+scripts_repo: "git@github.com:l3ocifer/scripts.git"
+devenv_repo: "git@github.com:l3ocifer/devenv.git"
 EOL
         
         success "Created secrets template at: $secrets_file"
