@@ -8,7 +8,7 @@
 
 # Mac App Store Applications
 - name: Check if Mac App Store apps are installed
-  shell: "mas list | grep '{{ item.id }}' || true"
+  shell: "mas list | grep -w '{{ item.id }}' || true"
   register: mas_check
   changed_when: false
   with_items: "{{ macos_apps | selectattr('id', 'defined') | list }}"
@@ -20,8 +20,9 @@
     id: "{{ item.item.id }}"
     state: present
   with_items: "{{ mas_check.results }}"
-  when: is_macos and item.stdout == ''
+  when: is_macos and item.stdout == '' and not ansible_check_mode
   failed_when: false
+  ignore_errors: yes
   tags: ['apps']
 
 # Ensure required directories exist
