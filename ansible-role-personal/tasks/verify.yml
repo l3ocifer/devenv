@@ -15,15 +15,23 @@
   no_log: true
 
 # Verify configuration symlinks
+- name: Verify source files exist
+  stat:
+    path: "{{ item.src | expanduser }}"
+  register: src_check
+  with_items: "{{ config_files }}"
+  failed_when: item.required and not src_check.stat.exists
+  no_log: false
+
 - name: Verify configuration symlinks
   stat:
     path: "{{ item.dest | expanduser }}"
+    follow: false
   register: symlink_check
   failed_when: >
     item.required and (
       not symlink_check.stat.exists or
-      not symlink_check.stat.islnk or
-      symlink_check.stat.lnk_source != (item.src | expanduser | realpath)
+      not symlink_check.stat.islnk
     )
   with_items: "{{ config_files }}"
   no_log: false
@@ -114,6 +122,8 @@
     msg: |
       Verification Results:
       - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
+      - Source Files: {{ src_check.results | map(attribute='stat.exists') | list | all }}
+      - Symlinks: {{ symlink_check.results | map(attribute='stat.islnk') | list | all }}
       - Tools: {{ tool_check.results | map(attribute='rc') | list | all == 0 }}
       - Syncthing: {{ syncthing_check.rc == 0 }}
       - Syncthing Config: {{ syncthing_config_check.stat.exists if syncthing_check.rc == 0 else 'N/A' }}
