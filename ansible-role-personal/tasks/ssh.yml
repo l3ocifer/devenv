@@ -63,4 +63,16 @@
     fi
   loop: "{{ ssh_keys | default([]) | selectattr('mode', 'equalto', '0600') | list }}"
   when: ssh_keys | length > 0
+  no_log: true
+  changed_when: false
+  register: ssh_key_agent_add
+  tags: ['ssh']
+
+- name: Display SSH key agent status
+  ansible.builtin.debug:
+    verbosity: 1
+    msg: "SSH key {{ item.item.name }} {{ 'added to agent' if item.rc == 0 else 'already in agent' }}"
+  loop: "{{ ssh_key_agent_add.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
   tags: ['ssh']
