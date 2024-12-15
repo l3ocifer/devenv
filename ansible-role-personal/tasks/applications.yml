@@ -7,12 +7,20 @@
   tags: ['apps']
 
 # Mac App Store Applications
-- name: Install Mac App Store applications
-  community.general.mas:
-    id: "{{ item.id }}"
-    state: present
+- name: Check if Mac App Store apps are installed
+  shell: "mas list | grep '{{ item.id }}' || true"
+  register: mas_check
+  changed_when: false
   with_items: "{{ macos_apps | selectattr('id', 'defined') | list }}"
   when: is_macos
+  tags: ['apps']
+
+- name: Install Mac App Store applications
+  community.general.mas:
+    id: "{{ item.item.id }}"
+    state: present
+  with_items: "{{ mas_check.results }}"
+  when: is_macos and item.stdout == ''
   tags: ['apps']
 
 # Ensure required directories exist
@@ -46,13 +54,21 @@
   tags: ['apps']
 
 # Homebrew Cask Applications
-- name: Install desktop applications via Homebrew
-  community.general.homebrew_cask:
-    name: "{{ item.brew }}"
-    state: present
-    greedy: true
+- name: Check if Homebrew cask apps are installed
+  shell: "brew list --cask | grep -w '^{{ item.brew }}$' || true"
+  register: brew_check
+  changed_when: false
   with_items: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
   when: is_macos
+  tags: ['apps']
+
+- name: Install desktop applications via Homebrew
+  community.general.homebrew_cask:
+    name: "{{ item.item.brew }}"
+    state: present
+    greedy: true
+  with_items: "{{ brew_check.results }}"
+  when: is_macos and item.stdout == ''
   tags: ['apps']
 
 # Direct Download Applications
@@ -77,52 +93,11 @@
     - { src: "~/.config/personal/logseq/config.edn", dest: "~/.logseq/config.edn" }
   tags: ['apps']
 
-# Ensure proper permissions for Docker socket
-- name: Ensure Docker socket permissions
-  file:
-    path: /var/run/docker.sock
-    mode: '0666'
-  become: true
-  when: is_macos
-  ignore_errors: yes
-  tags: ['apps']
-
-# Configure Colima (Docker alternative)
-- name: Configure Colima
-  shell: |
-    colima stop || true
-    colima start --cpu 4 --memory 8 --disk 100
-  when: is_macos
+# CLI Tools Installation
+- name: Check if CLI tools are installed
+  shell: "brew list --formula | grep -w '^{{ item }}$' || true"
+  register: cli_check
   changed_when: false
-  tags: ['apps']
-
-# Post-installation checks
-- name: Verify installations
-  shell: "{{ item }}"
-  register: check_result
-  changed_when: false
-  failed_when: false
-  with_items:
-    - "docker --version"
-    - "colima status"
-    - "podman --version"
-    - "zed --version"
-    - "cursor --version"
-    - "vlc --version"
-  when: is_macos
-  tags: ['apps']
-
-- name: Display installation results
-  debug:
-    var: check_result
-  when: is_macos
-  tags: ['apps']
-
-# Additional CLI tools from script and .zshrc
-- name: Install CLI tools via Homebrew
-  community.general.homebrew:
-    name: "{{ item }}"
-    state: present
   with_items:
     - thefuck
     - starship
@@ -154,11 +129,19 @@
   when: is_macos
   tags: ['cli']
 
-# Linux Applications
-- name: Install Linux applications
-  apt:
-    name: "{{ item }}"
+- name: Install CLI tools via Homebrew
+  community.general.homebrew:
+    name: "{{ item.item }}"
     state: present
+  with_items: "{{ cli_check.results }}"
+  when: is_macos and item.stdout == ''
+  tags: ['cli']
+
+# Linux Applications
+- name: Check if Linux applications are installed
+  shell: "dpkg -l | grep -w '^ii.*{{ item }}' || true"
+  register: linux_check
+  changed_when: false
   with_items:
     - podman
     - chromium-browser
@@ -177,10 +160,25 @@
     - tmux
     - direnv
   when: is_linux
+  tags: ['apps']
+
+- name: Install Linux applications
+  apt:
+    name: "{{ item.item }}"
+    state: present
+  with_items: "{{ linux_check.results }}"
+  when: is_linux and item.stdout == ''
   become: true
   tags: ['apps']
 
 # Docker installation for Linux
+- name: Check if Docker is installed
+  shell: "docker --version || true"
+  register: docker_check
+  changed_when: false
+  when: is_linux
+  tags: ['apps']
+
 - name: Install Docker on Linux
   block:
     - name: Add Docker GPG key
@@ -200,10 +198,57 @@
           - docker-ce-cli
           - containerd.io
         state: present
-        update_cache: yes
-  when: is_linux and not is_wsl
+  when: is_linux and docker_check.rc != 0
   become: true
-  tags: ['docker']
+  tags: ['apps']
+
+# Ensure proper permissions for Docker socket
+- name: Ensure Docker socket permissions
+  file:
+    path: /var/run/docker.sock
+    mode: '0666'
+  become: true
+  when: is_macos
+  ignore_errors: yes
+  tags: ['apps']
+
+# Configure Colima (Docker alternative)
+- name: Check Colima status
+  shell: "colima status || true"
+  register: colima_check
+  changed_when: false
+  when: is_macos
+  tags: ['apps']
+
+- name: Configure Colima
+  shell: |
+    colima stop || true
+    colima start --cpu 4 --memory 8 --disk 100
+  when: is_macos and colima_check.rc != 0
+  changed_when: false
+  tags: ['apps']
+
+# Post-installation checks
+- name: Verify installations
+  shell: "{{ item }}"
+  register: check_result
+  changed_when: false
+  failed_when: false
+  with_items:
+    - "docker --version"
+    - "colima status"
+    - "podman --version"
+    - "zed --version"
+    - "cursor --version"
+    - "vlc --version"
+  when: is_macos
+  tags: ['apps']
+
+- name: Display installation results
+  debug:
+    var: check_result
+  when: is_macos
+  tags: ['apps']
 
 # WSL specific setup
 - name: Configure WSL specific tools

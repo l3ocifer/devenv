@@ -37,6 +37,62 @@
     - curl --version
     - zsh --version
 
+# Verify Syncthing
+- name: Check Syncthing service status
+  shell: |
+    pgrep -f syncthing || (launchctl list | grep syncthing)
+  register: syncthing_check
+  changed_when: false
+  failed_when: false
+
+- name: Verify Syncthing configuration
+  stat:
+    path: "~/.config/syncthing/config.xml"
+  register: syncthing_config
+  failed_when: not syncthing_config.stat.exists
+
+- name: Verify secrets file is being synced
+  shell: |
+    grep -q "{{ secrets_file | expanduser | basename }}" ~/.config/syncthing/config.xml
+  register: secrets_sync_check
+  changed_when: false
+  failed_when: secrets_sync_check.rc != 0
+
+# Verify symlinks
+- name: Verify configuration symlinks
+  stat:
+    path: "{{ item.dest }}"
+  register: symlink_check
+  failed_when: not symlink_check.stat.exists or not symlink_check.stat.islnk
+  with_items:
+    # Shell configs
+    - { dest: "~/.zshrc" }
+    - { dest: "~/.config/zsh/aliases" }
+    - { dest: "~/.config/zsh/exports" }
+    # Git configs
+    - { dest: "~/.gitconfig" }
+    - { dest: "~/.config/git/config" }
+    # SSH configs
+    - { dest: "~/.ssh/config" }
+    # Application configs
+    - { dest: "~/.config/cursor/settings.json" }
+    - { dest: "~/.config/zed/settings.json" }
+    - { dest: "~/.config/pulsar/config.cson" }
+    - { dest: "~/.logseq/config.edn" }
+
+# Verify SSH and Git functionality
+- name: Test SSH agent
+  shell: ssh-add -l
+  register: ssh_agent_check
+  changed_when: false
+  failed_when: ssh_agent_check.rc == 2  # RC=2 means no agent running, RC=1 means no keys but agent running
+
+- name: Test Git SSH access
+  shell: ssh -T git@github.com
+  register: git_ssh_check
+  changed_when: false
+  failed_when: git_ssh_check.rc == 255  # RC=1 is normal for successful auth
+
 # Platform-specific verification
 - name: Verify macOS specific tools
   command: "{{ item }}"
@@ -58,3 +114,16 @@
     - docker --version
     - python3 -m pip --version
   when: is_linux or is_wsl
+
+# Display verification results
+- name: Show verification summary
+  debug:
+    msg: |
+      Verification Results:
+      - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
+      - Git Repos: {{ git_check.results | map(attribute='rc') | list | all == 0 }}
+      - Tools: {{ tool_check.results | map(attribute='rc') | list | all == 0 }}
+      - Syncthing: {{ syncthing_check.rc == 0 }}
+      - Secrets Sync: {{ secrets_sync_check.rc == 0 }}
+      - SSH Agent: {{ ssh_agent_check.rc != 2 }}
+      - Git SSH: {{ git_ssh_check.rc != 255 }}
