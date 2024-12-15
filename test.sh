@@ -167,6 +167,44 @@ cleanup_virtualbox() {
     done
 }
 
+check_virtualbox() {
+    echo -e "${YELLOW}Checking VirtualBox status...${NC}"
+    
+    # Check if VBoxManage exists
+    if ! command -v VBoxManage >/dev/null 2>&1; then
+        echo -e "${RED}VirtualBox is not installed. Please install VirtualBox first.${NC}"
+        exit 1
+    fi
+    
+    # Check kernel modules on macOS
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "Executing: /usr/bin/kmutil showloaded"
+        /usr/bin/kmutil showloaded | grep -i virtualbox || true
+        
+        echo "Loading VirtualBox kernel extensions..."
+        sudo kextload -b org.virtualbox.kext.VBoxDrv || true
+        sudo kextload -b org.virtualbox.kext.VBoxNetFlt || true
+        sudo kextload -b org.virtualbox.kext.VBoxNetAdp || true
+        sudo kextload -b org.virtualbox.kext.VBoxUSB || true
+        
+        # Force unload and reload of kernel modules
+        echo "Force reloading VirtualBox kernel modules..."
+        sudo kextunload -b org.virtualbox.kext.VBoxDrv || true
+        sudo kextunload -b org.virtualbox.kext.VBoxNetFlt || true
+        sudo kextunload -b org.virtualbox.kext.VBoxNetAdp || true
+        sudo kextunload -b org.virtualbox.kext.VBoxUSB || true
+        
+        sleep 10  # Give system time to clean up
+        
+        sudo kextload -b org.virtualbox.kext.VBoxDrv || true
+        sudo kextload -b org.virtualbox.kext.VBoxNetFlt || true
+        sudo kextload -b org.virtualbox.kext.VBoxNetAdp || true
+        sudo kextload -b org.virtualbox.kext.VBoxUSB || true
+        
+        sleep 5  # Give modules time to initialize
+    fi
+}
+
 # Main testing function
 main() {
     # Check for cleanup flag
@@ -182,6 +220,9 @@ main() {
     # Install prerequisites
     install_prerequisites
 
+    # Check VirtualBox status
+    check_virtualbox
+    
     # Clean up any stale VirtualBox VMs
     cleanup_virtualbox
 
@@ -201,6 +242,8 @@ main() {
         fi
         # Clean up VirtualBox VM regardless of test result
         cleanup_virtualbox
+        # Give VirtualBox time to clean up
+        sleep 5
     done
     
     # Report results

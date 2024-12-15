@@ -23,6 +23,15 @@
   failed_when: item.required and not src_check.stat.exists
   no_log: false
 
+- name: Create missing dotfiles from templates
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.src | expanduser }}"
+    mode: "0644"
+  with_items: "{{ config_files }}"
+  when: item.required and not src_check.results[ansible_loop.index0].stat.exists and item.template is defined
+  no_log: false
+
 - name: Verify configuration symlinks
   stat:
     path: "{{ item.dest | expanduser }}"
