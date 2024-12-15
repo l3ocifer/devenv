@@ -21,6 +21,7 @@
     state: present
   with_items: "{{ mas_check.results }}"
   when: is_macos and item.stdout == ''
+  failed_when: false
   tags: ['apps']
 
 # Ensure required directories exist
