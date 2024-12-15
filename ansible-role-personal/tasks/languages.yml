@@ -1,18 +1,28 @@
 ---
 # Common Development Tools
-- name: Install common build tools
-  package:
-    name: "{{ item }}"
-    state: present
-  become: true
-  with_items:
-    - build-essential
-    - git
-    - curl
-    - wget
-  when: is_linux
+- name: Check if development tools are installed
+  command: "brew list --formula {{ item.name }}"
+  register: dev_tools_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+  loop: "{{ development_tools }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ item.name }}"
+  tags: ['languages']
+
+- name: Install development tools
+  community.general.homebrew:
+    name: "{{ item.item.packages }}"
+    state: present
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
+  loop: "{{ dev_tools_check.results }}"
+  when: is_macos and item.rc != 0 and not ansible_check_mode
+  loop_control:
+    label: "{{ item.item.name }}"
   tags: ['languages']
 
 # Rust Installation and Update
