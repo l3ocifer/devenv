@@ -66,7 +66,7 @@
     - ripgrep  # Fast grep
     - fd-find  # Fast find
     - bat  # Better cat
-    - exa  # Better ls
+    - eza  # Better ls (fork of exa)
     - tmux  # Terminal multiplexer
     - direnv  # Directory-based environments
   become: "{{ not is_macos }}"
@@ -85,7 +85,7 @@
     - ripgrep
     - fd
     - bat
-    - exa
+    - eza
     - tmux
     - direnv
   when: is_macos

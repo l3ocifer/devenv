@@ -90,6 +90,6 @@ shell_tools:
   - ripgrep
   - fd
   - bat
-  - exa
+  - eza  # Modern ls replacement (fork of exa)
   - tmux
   - direnv

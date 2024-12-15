@@ -75,7 +75,7 @@ cd ~/git/devenv
 - Git + Configuration
 - SSH Setup
 - Shell Configuration (zsh)
-- CLI Tools (ripgrep, fd, bat, etc.)
+- CLI Tools (ripgrep, fd, bat, eza, etc.)
 
 ## Configuration
 

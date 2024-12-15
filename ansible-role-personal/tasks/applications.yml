@@ -146,7 +146,7 @@
     - ripgrep
     - fd
     - bat
-    - exa
+    - eza
     - tmux
     - direnv
     - vim
@@ -173,7 +173,7 @@
     - ripgrep
     - fd-find
     - bat
-    - exa
+    - eza
     - tmux
     - direnv
   when: is_linux
