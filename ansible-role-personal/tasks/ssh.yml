@@ -1,7 +1,7 @@
 ---
 - name: Ensure SSH directory exists with correct permissions
   file:
-    path: "{{ ssh_config_dir }}"
+    path: "{{ ssh_config_dir | expanduser }}"
     state: directory
     mode: '0700'
   tags: ['ssh']
@@ -34,7 +34,7 @@
 - name: Add SSH keys to agent
   shell: |
     if ! ssh-add -l | grep -q "{{ item.name }}"; then
-      ssh-add {{ ssh_config_dir }}/{{ item.name }}
+      ssh-add {{ ssh_config_dir | expanduser }}/{{ item.name }}
     fi
   with_items: >-
     {{
@@ -42,4 +42,5 @@
       reject('search', '.*\.pub$') |
       list
     }}
+  when: ssh_keys | length > 0
   tags: ['ssh']

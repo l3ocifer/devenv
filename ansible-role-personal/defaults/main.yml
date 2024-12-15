@@ -15,6 +15,10 @@ secrets_file: "~/.config/personal/secrets.yml"
 devenv_repo: "https://github.com/l3ocifer/devenv.git"
 scripts_repo: "https://github.com/l3ocifer/scripts.git"
 
+# SSH Configuration
+ssh_config_dir: "~/.ssh"
+ssh_keys: []
+
 # Mac OS Applications
 macos_apps:
   # Essential Development Tools
