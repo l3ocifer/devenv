@@ -113,6 +113,7 @@
       package:
         name: rbenv
         state: present
+      become: true
       when: is_linux
 
     - name: Install rbenv on macOS
