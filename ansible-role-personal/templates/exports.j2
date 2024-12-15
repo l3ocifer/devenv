@@ -19,11 +19,18 @@ export HISTTIMEFORMAT="%d/%m/%y %T "
 # Homebrew configurations
 export HOMEBREW_NO_ANALYTICS=1
 
-# Python configurations
+# Python configurations for macOS
 if [ -f "/Users/{{ ansible_user_id }}/miniconda3/etc/profile.d/conda.sh" ]; then
     . "/Users/{{ ansible_user_id }}/miniconda3/etc/profile.d/conda.sh"
 else
     export PATH="/Users/{{ ansible_user_id }}/miniconda3/bin:$PATH"
+fi
+{% else %}
+# Python configurations for Linux
+if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    . "$HOME/miniconda3/etc/profile.d/conda.sh"
+else
+    export PATH="$HOME/miniconda3/bin:$PATH"
 fi
 {% endif %}
 
@@ -42,12 +49,20 @@ export FRONTPAGE_URL='ursulai.com'
 # Development Tools
 export TF_LOG='INFO'
 
-# Path Configuration
+{% if is_macos %}
+# macOS specific paths
 export PATH="/opt/homebrew/opt/gnu-getopt/bin:$PATH"
 export PATH="$PATH:/usr/local/sessionmanagerplugin/bin/"
 export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
 export CPPFLAGS="-I/opt/homebrew/opt/openjdk/include"
 export JAVA_HOME=$(/usr/libexec/java_home)
+{% else %}
+# Linux specific paths
+export PATH="$PATH:/usr/local/sessionmanagerplugin/bin/"
+{% if java_home is defined %}
+export JAVA_HOME="{{ java_home }}"
+{% endif %}
+{% endif %}
 
 # Bun Configuration
 export BUN_INSTALL="$HOME/.bun"
