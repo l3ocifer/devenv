@@ -90,7 +90,7 @@
 
 - name: Install Linux desktop applications
   package:
-    name: "{{ desktop_apps | selectattr('package', 'defined') | map(attribute='package') | list }}"
+    name: "{{ desktop_apps | selectattr('package', 'defined') | rejectattr('macos_only', 'defined') | map(attribute='package') | list }}"
     state: present
   become: true
   when: (is_linux and not is_wsl) or (is_wsl and item.wsl_compatible | default(false))
