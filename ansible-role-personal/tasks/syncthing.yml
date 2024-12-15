@@ -1,47 +1,34 @@
 ---
 # Install and configure Syncthing
-- name: Install Syncthing
+- name: Install Syncthing (MacOS)
+  community.general.homebrew:
+    name: syncthing
+    state: present
+  when: is_macos
+
+- name: Install Syncthing (Linux)
   block:
-    - name: Install Syncthing (MacOS)
-      community.general.homebrew_cask:
+    - name: Add Syncthing apt key
+      ansible.builtin.apt_key:
+        url: https://syncthing.net/release-key.gpg
+        state: present
+      when: is_linux
+
+    - name: Add Syncthing repository
+      ansible.builtin.apt_repository:
+        repo: deb https://apt.syncthing.net/ syncthing stable
+        state: present
+        filename: syncthing
+      when: is_linux
+
+    - name: Install Syncthing package
+      ansible.builtin.apt:
         name: syncthing
         state: present
-      when: is_macos
-      register: syncthing_macos_install
-      
-    - name: Install Syncthing (Linux)
+        update_cache: yes
       when: is_linux
-      become: true
-      block:
-        - name: Add Syncthing repository key
-          apt_key:
-            url: https://syncthing.net/release-key.txt
-            state: present
-            id: 37C84554E7E0A261E4F76E1ED26E6ED000654A3E
-          when: is_wsl
-          register: syncthing_key_add
-          
-        - name: Add Syncthing repository
-          apt_repository:
-            repo: deb https://apt.syncthing.net/ syncthing stable
-            state: present
-            filename: syncthing
-          when: is_wsl
-          register: syncthing_repo_add
-          
-        - name: Install Syncthing package
-          apt:
-            name: syncthing
-            state: present
-            update_cache: yes
-          register: syncthing_linux_install
-  rescue:
-    - name: Handle Syncthing installation failure
-      debug:
-        msg: "Failed to install Syncthing. Please check system requirements and try again."
-  tags: ['syncthing']
+  when: is_linux
 
-# Create required directories
 - name: Create Syncthing directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -66,32 +53,35 @@
 - name: Configure Syncthing
   block:
     - name: Create temporary directory for Syncthing config
-      tempfile:
+      ansible.builtin.tempfile:
         state: directory
         suffix: syncthing_config
       register: syncthing_temp_dir
-      
-    - name: Generate Syncthing configuration
-      template:
-        src: syncthing_config.xml.j2
-        dest: "{{ syncthing_temp_dir.path }}/config.xml"
-        mode: '0600'
-      register: syncthing_config_template
+
+    - name: Generate default Syncthing configuration
+      ansible.builtin.command:
+        cmd: "syncthing generate --config={{ syncthing_temp_dir.path }}"
+      register: syncthing_generate
+      changed_when: syncthing_generate.rc == 0
+      when: is_macos
 
     - name: Validate Syncthing configuration (MacOS)
-      command: >
-        /usr/local/bin/syncthing cli config validate {{ syncthing_config_template.dest }}
-      register: syncthing_config_validate
+      ansible.builtin.command:
+        cmd: "syncthing cli config validate {{ syncthing_temp_dir.path }}/config.xml"
+      register: syncthing_validate
+      changed_when: syncthing_validate.rc == 0
       when: is_macos
-      failed_when: syncthing_config_validate.rc != 0
-      changed_when: false
+      ignore_errors: true
 
     - name: Apply Syncthing configuration (MacOS)
-      command: >
-        /usr/local/bin/syncthing cli config update {{ syncthing_config_template.dest }}
-      register: syncthing_config_update
-      when: is_macos and syncthing_config_validate is success
-      failed_when: syncthing_config_update.rc != 0
+      ansible.builtin.command:
+        cmd: "syncthing cli config {{ item }}"
+      loop:
+        - "folders add {{ syncthing_secrets_folder_id }} {{ '~/.config/personal' | expanduser }}"
+        - "folders add {{ syncthing_scripts_folder_id }} {{ scripts_dir | expanduser }}"
+        - "folders add {{ syncthing_ssh_folder_id }} {{ '~/.ssh' | expanduser }}"
+        - "folders add {{ syncthing_git_folder_id }} {{ git_base_dir | expanduser }}"
+      when: is_macos and syncthing_validate.rc == 0
 
     - name: Configure Syncthing (Linux)
       template:
@@ -103,7 +93,7 @@
       when: not is_macos
   always:
     - name: Cleanup temporary directory
-      file:
+      ansible.builtin.file:
         path: "{{ syncthing_temp_dir.path }}"
         state: absent
       when: syncthing_temp_dir.path is defined
