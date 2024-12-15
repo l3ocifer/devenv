@@ -11,6 +11,15 @@ scripts_dir: "~/.scripts"
 devenv_dir: "{{ git_base_dir }}/devenv"
 secrets_file: "~/.config/personal/secrets.yml"
 
+# Repository configurations
+repositories:
+  devenv:
+    repo: "git@github.com:l3ocifer/devenv.git"
+    dest: "{{ devenv_dir }}"
+  scripts:
+    repo: "git@github.com:l3ocifer/scripts.git"
+    dest: "{{ scripts_dir }}"
+
 # SSH Configuration
 ssh_config_dir: "~/.ssh"
 ssh_keys: []
