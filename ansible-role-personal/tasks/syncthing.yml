@@ -65,53 +65,62 @@
   tags: ['syncthing']
 
 - name: Configure Syncthing
-  template:
-    src: syncthing_config.xml.j2
-    dest: ~/.config/syncthing/config.xml
-    mode: '0600'
-    validate: 'syncthing cli config validate %s'
-  register: syncthing_config
+  block:
+    - name: Validate Syncthing configuration
+      template:
+        src: syncthing_config.xml.j2
+        dest: "{{ ansible_user_dir }}/.ansible/tmp/ansible-tmp-{{ ansible_date_time.epoch }}-{{ ansible_pid }}-{{ ansible_unique_id }}/.source.xml"
+        mode: '0600'
+      register: syncthing_config_template
+
+    - name: Configure Syncthing
+      command: >
+        /usr/local/bin/syncthing cli config validate {{ ansible_user_dir }}/.ansible/tmp/ansible-tmp-{{ ansible_date_time.epoch }}-{{ ansible_pid }}-{{ ansible_unique_id }}/.source.xml
+      register: syncthing_config_validate
+      when: is_macos
+      failed_when: syncthing_config_validate.rc != 0
+      changed_when: false
+
+    - name: Apply Syncthing configuration
+      command: >
+        /usr/local/bin/syncthing cli config update {{ ansible_user_dir }}/.ansible/tmp/ansible-tmp-{{ ansible_date_time.epoch }}-{{ ansible_pid }}-{{ ansible_unique_id }}/.source.xml
+      register: syncthing_config_update
+      when: is_macos and syncthing_config_validate is success
+      failed_when: syncthing_config_update.rc != 0
+
+    - name: Configure Syncthing
+      template:
+        src: syncthing_config.xml.j2
+        dest: ~/.config/syncthing/config.xml
+        mode: '0600'
+        validate: 'syncthing cli config validate %s'
+      register: syncthing_config
+      when: not is_macos
   tags: ['syncthing']
 
 # Service Management
-- name: Configure Syncthing service
-  block:
-    - name: Create LaunchAgent directory (MacOS)
-      file:
-        path: ~/Library/LaunchAgents
-        state: directory
-        mode: '0755'
-      when: is_macos
+- name: Start Syncthing service (Linux)
+  systemd:
+    name: syncthing@{{ ansible_user_id }}
+    state: started
+    enabled: yes
+  become: true
+  when: is_linux
+  tags: ['syncthing']
 
-    - name: Install Syncthing LaunchAgent (MacOS)
-      template:
-        src: syncthing.plist.j2
-        dest: ~/Library/LaunchAgents/net.syncthing.syncthing.plist
-        mode: '0644'
-        validate: 'plutil -lint %s'
-      when: is_macos
-      register: launchagent
+- name: Start Syncthing service (macOS)
+  command: brew services start syncthing
+  register: syncthing_service_start
+  changed_when: "'Successfully started' in syncthing_service_start.stdout"
+  failed_when: syncthing_service_start.rc != 0 and 'already started' not in syncthing_service_start.stderr
+  when: is_macos
+  tags: ['syncthing']
 
-    - name: Manage Syncthing LaunchAgent (MacOS)
-      command: "{{ item }}"
-      with_items:
-        - launchctl unload ~/Library/LaunchAgents/net.syncthing.syncthing.plist
-        - launchctl load ~/Library/LaunchAgents/net.syncthing.syncthing.plist
-      when: is_macos and (launchagent.changed or syncthing_config.changed)
-      ignore_errors: true
-
-    - name: Start Syncthing service (Linux)
-      systemd:
-        name: syncthing@{{ ansible_user_id }}
-        state: restarted
-        enabled: yes
-        scope: user
-        daemon_reload: yes
-      when: is_linux and not is_wsl and (syncthing_config.changed or syncthing_linux_install.changed)
-  rescue:
-    - name: Handle service configuration failure
-      debug:
-        msg: "Failed to configure Syncthing service. Please check system logs for details."
+- name: Wait for Syncthing service
+  wait_for:
+    port: 8384
+    timeout: 30
+  when: syncthing_service_start is changed
   tags: ['syncthing']
 
 # Verify Installation
