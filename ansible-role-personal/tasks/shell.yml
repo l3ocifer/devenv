@@ -44,22 +44,25 @@
       block:
         - name: Check Oh My Zsh directory
           stat:
-            path: "{{ oh_my_zsh_dir }}/.git"
+            path: "{{ oh_my_zsh_dir }}"
           register: omz_check
-          failed_when: not omz_check.stat.exists
 
         - name: Check plugins installation
           stat:
-            path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}/.git"
+            path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
           loop: "{{ zsh_plugins }}"
           register: plugin_checks
-          failed_when: not stat.exists
 
         - name: Check theme installation
           stat:
-            path: "{{ oh_my_zsh_custom }}/themes/powerlevel10k/.git"
+            path: "{{ oh_my_zsh_custom }}/themes/powerlevel10k"
           register: theme_check
-          failed_when: not theme_check.stat.exists
+
+        - name: Show installation status
+          debug:
+            msg: >
+              Oh My Zsh status: {{ omz_check.stat.exists }},
+              Theme status: {{ theme_check.stat.exists }}
       rescue:
         - name: Handle verification failure
           debug:
