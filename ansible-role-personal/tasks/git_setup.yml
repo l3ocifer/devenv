@@ -66,8 +66,8 @@
 # Client-specific git configurations
 - name: Create client-specific git configs
   template:
-    src: "gitconfig-{{ item }}.j2"
-    dest: "{{ '~/.config/git/includes/gitconfig-' | expanduser }}{{ item }}"
+    src: "gitconfig-client.j2"
+    dest: "{{ '~/.config/git/includes/gitconfig-' | expanduser }}{{ item.name }}"
     mode: '0644'
     backup: yes
     force: no
