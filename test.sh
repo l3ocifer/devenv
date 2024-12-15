@@ -153,6 +153,20 @@ EOL
     return 0
 }
 
+# Function to clean up VirtualBox environment
+cleanup_virtualbox() {
+    echo -e "${YELLOW}Cleaning up VirtualBox environment...${NC}"
+    # Get list of VMs and clean them up
+    local vms=$(vboxmanage list vms | awk -F'"' '{print $2}')
+    for vm in $vms; do
+        if [[ $vm == tmp* ]]; then
+            echo "Removing stale VM: $vm"
+            vboxmanage controlvm "$vm" poweroff 2>/dev/null || true
+            vboxmanage unregistervm "$vm" --delete 2>/dev/null || true
+        fi
+    done
+}
+
 # Main testing function
 main() {
     # Check for cleanup flag
@@ -168,6 +182,9 @@ main() {
     # Install prerequisites
     install_prerequisites
 
+    # Clean up any stale VirtualBox VMs
+    cleanup_virtualbox
+
     echo -e "${YELLOW}Starting tests for all platforms...${NC}"
     
     # Run tests for each platform sequentially
@@ -182,6 +199,8 @@ main() {
                 (cd "$test_dir" && vagrant destroy -f)
             fi
         fi
+        # Clean up VirtualBox VM regardless of test result
+        cleanup_virtualbox
     done
     
     # Report results

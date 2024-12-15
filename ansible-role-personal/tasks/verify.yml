@@ -2,7 +2,7 @@
 # Verify directory structure
 - name: Verify directories
   stat:
-    path: "{{ item }}"
+    path: "{{ item | expanduser }}"
   register: dir_check
   failed_when: not dir_check.stat.exists
   with_items:
@@ -20,8 +20,11 @@
     path: "{{ item.dest | expanduser }}"
   register: symlink_check
   failed_when: >
-    (item.required and not symlink_check.stat.exists) or
-    (symlink_check.stat.exists and not symlink_check.stat.islnk)
+    item.required and (
+      not symlink_check.stat.exists or
+      not symlink_check.stat.islnk or
+      symlink_check.stat.lnk_source != (item.src | expanduser | realpath)
+    )
   with_items: "{{ config_files }}"
   no_log: false
 
@@ -40,23 +43,35 @@
 # Verify Syncthing
 - name: Check Syncthing service status
   shell: |
+    {% if ansible_system == 'Darwin' %}
     pgrep -f syncthing || (launchctl list | grep syncthing)
+    {% else %}
+    systemctl is-active --quiet syncthing@$USER || pgrep -f syncthing
+    {% endif %}
   register: syncthing_check
   changed_when: false
   failed_when: false
 
-- name: Verify Syncthing configuration
-  command: grep -q "folder id=" ~/.config/syncthing/config.xml
-  register: syncthing_config
-  changed_when: false
-  failed_when: syncthing_config.rc != 0
-  when: syncthing_check.rc == 0
+- name: Verify Syncthing configuration exists
+  stat:
+    path: "~/.config/syncthing/config.xml"
+  register: syncthing_config_check
+  failed_when: syncthing_check.rc == 0 and not syncthing_config_check.stat.exists
 
-- name: Verify secrets file is being synced
-  command: grep -q "folder id=\"{{ syncthing_secrets_folder_id }}\"" ~/.config/syncthing/config.xml
-  register: secrets_sync_check
-  changed_when: false
-  failed_when: secrets_sync_check.rc != 0
+- name: Verify Syncthing secrets folder
+  block:
+    - name: Check secrets folder in Syncthing config
+      command: grep -q "folder id=\"{{ syncthing_secrets_folder_id }}\"" ~/.config/syncthing/config.xml
+      register: secrets_sync_check
+      changed_when: false
+      failed_when: false
+
+    - name: Verify secrets folder path
+      command: grep -q "path=\"{{ secrets_dir | expanduser | realpath }}\"" ~/.config/syncthing/config.xml
+      register: secrets_path_check
+      changed_when: false
+      failed_when: secrets_sync_check.rc == 0 and secrets_path_check.rc != 0
+  when: syncthing_check.rc == 0 and syncthing_config_check.stat.exists
 
 # Verify SSH and Git functionality
 - name: Test SSH agent
@@ -94,13 +109,14 @@
   when: is_linux or is_wsl
 
 # Display verification results
-- name: Show verification summary
+- name: Display verification summary
   debug:
     msg: |
       Verification Results:
       - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
       - Tools: {{ tool_check.results | map(attribute='rc') | list | all == 0 }}
-      - Syncthing: {{ syncthing_config.rc == 0 }}
-      - Secrets Sync: {{ secrets_sync_check.rc == 0 }}
+      - Syncthing: {{ syncthing_check.rc == 0 }}
+      - Syncthing Config: {{ syncthing_config_check.stat.exists if syncthing_check.rc == 0 else 'N/A' }}
+      - Secrets Sync: {{ secrets_sync_check.rc == 0 if syncthing_check.rc == 0 else 'N/A' }}
       - SSH Agent: {{ ssh_agent_check.rc != 2 }}
       - Git SSH: {{ git_ssh_check.rc != 255 }}
