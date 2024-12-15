@@ -1,13 +1,13 @@
 ---
 # Oh My Zsh setup
-- name: Check Oh My Zsh installation
-  stat:
-    path: "{{ oh_my_zsh_custom }}"
-  register: omz_stat
-  tags: ['shell']
-
-- name: Install Oh My Zsh and plugins
+- name: Setup Oh My Zsh environment
   block:
+    - name: Check Oh My Zsh installation
+      stat:
+        path: "{{ oh_my_zsh_dir }}"
+      register: omz_stat
+      tags: ['shell']
+
     - name: Clone Oh My Zsh
       git:
         repo: "https://github.com/ohmyzsh/ohmyzsh.git"
@@ -29,9 +29,7 @@
         dest: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
         version: master
         depth: 1
-      loop:
-        - { name: 'zsh-autosuggestions', repo: 'https://github.com/zsh-users/zsh-autosuggestions' }
-        - { name: 'zsh-syntax-highlighting', repo: 'https://github.com/zsh-users/zsh-syntax-highlighting.git' }
+      loop: "{{ zsh_plugins }}"
       when: not omz_stat.stat.exists
 
     - name: Install powerlevel10k theme
@@ -43,12 +41,31 @@
       when: not omz_stat.stat.exists
 
     - name: Verify Oh My Zsh installation
-      stat:
-        path: "{{ oh_my_zsh_dir }}/.git"
-      register: omz_verify
-      failed_when: not omz_verify.stat.exists
+      block:
+        - name: Check Oh My Zsh directory
+          stat:
+            path: "{{ oh_my_zsh_dir }}/.git"
+          register: omz_check
+          failed_when: not omz_check.stat.exists
+
+        - name: Check plugins installation
+          stat:
+            path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
+          loop: "{{ zsh_plugins }}"
+          register: plugin_check
+          failed_when: not item.stat.exists
+
+        - name: Check theme installation
+          stat:
+            path: "{{ oh_my_zsh_custom }}/themes/powerlevel10k"
+          register: theme_check
+          failed_when: not theme_check.stat.exists
+      rescue:
+        - name: Handle verification failure
+          debug:
+            msg: "Failed to verify Oh My Zsh installation. Please check the installation logs."
   rescue:
-    - name: Handle Oh My Zsh installation failure
+    - name: Handle Oh My Zsh setup failure
       debug:
-        msg: "Failed to install Oh My Zsh. Please check your internet connection and try again."
+        msg: "Failed to setup Oh My Zsh. Please check your internet connection and try again."
   tags: ['shell']

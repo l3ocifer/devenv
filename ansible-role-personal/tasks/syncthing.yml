@@ -10,6 +10,8 @@
       register: syncthing_macos_install
       
     - name: Install Syncthing (Linux)
+      when: is_linux
+      become: true
       block:
         - name: Add Syncthing repository key
           apt_key:
@@ -17,6 +19,7 @@
             state: present
             id: 37C84554E7E0A261E4F76E1ED26E6ED000654A3E
           when: is_wsl
+          register: syncthing_key_add
           
         - name: Add Syncthing repository
           apt_repository:
@@ -24,15 +27,14 @@
             state: present
             filename: syncthing
           when: is_wsl
+          register: syncthing_repo_add
           
         - name: Install Syncthing package
           apt:
             name: syncthing
             state: present
             update_cache: yes
-      when: is_linux
-      become: true
-      register: syncthing_linux_install
+          register: syncthing_linux_install
   rescue:
     - name: Handle Syncthing installation failure
       debug:

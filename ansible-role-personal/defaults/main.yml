@@ -165,7 +165,8 @@ syncthing_git_folder_id: "git"
 syncthing_api_key: "{{ app_secrets.syncthing.api_key }}"
 
 # Zsh Configuration
-oh_my_zsh_custom: "{{ '~/.oh-my-zsh' | expanduser }}"
+oh_my_zsh_dir: "{{ '~/.oh-my-zsh' | expanduser }}"
+oh_my_zsh_custom: "{{ oh_my_zsh_dir }}/custom"
 zsh_plugins:
   - name: zsh-autosuggestions
     repo: https://github.com/zsh-users/zsh-autosuggestions.git
