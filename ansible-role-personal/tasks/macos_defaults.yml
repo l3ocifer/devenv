@@ -17,7 +17,7 @@
     - { domain: "com.apple.finder", key: "ShowPathbar", type: "bool", value: true }
     - { domain: "com.apple.finder", key: "ShowStatusBar", type: "bool", value: true }
     - { domain: "com.apple.finder", key: "FXPreferredViewStyle", type: "string", value: "Nlsv" }
-    - { domain: "com.apple.finder", key: "AppleShowAllFiles", type: "bool", value: true }
+    - { domain: "com.apple.finder", key: "AppleShowAllFiles", type: "string", value: "YES" }
     - { domain: "com.apple.finder", key: "ShowExternalHardDrivesOnDesktop", type: "bool", value: true }
     - { domain: "com.apple.finder", key: "ShowHardDrivesOnDesktop", type: "bool", value: true }
     - { domain: "com.apple.finder", key: "NewWindowTargetPath", type: "string", value: "file://${HOME}/Desktop/" }
@@ -32,17 +32,13 @@
     
     # Security settings
     - { domain: "com.apple.screensaver", key: "askForPassword", type: "int", value: 1 }
-    - { domain: "com.apple.screensaver", key: "askForPasswordDelay", type: "float", value: 0 }
-    
-    # Mail settings
-    - { domain: "com.apple.mail", key: "AddressesIncludeNameOnPasteboard", type: "bool", value: false }
+    - { domain: "com.apple.screensaver", key: "askForPasswordDelay", type: "int", value: 0 }
     
     # Printing settings
     - { domain: "com.apple.print.PrintingPrefs", key: "Quit When Finished", type: "bool", value: true }
     
     # System settings
     - { domain: "com.apple.systempreferences", key: "TMShowUnsupportedNetworkVolumes", type: "bool", value: true }
-    - { domain: "/Library/Preferences/SystemConfiguration/com.apple.smb.server", key: "NetBIOSName", type: "string", value: "{{ ansible_hostname }}" }
   when: ansible_os_family == "Darwin"
   tags: ['macos']
 
