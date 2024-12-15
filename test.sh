@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -6,259 +8,113 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Trap for cleanup
-cleanup() {
-    local exit_code=$?
-    echo -e "\n${YELLOW}Cleaning up...${NC}"
-    
-    # Clean up any remaining test directories
-    if [ -n "$results_dir" ] && [ -d "$results_dir" ]; then
-        rm -rf "$results_dir"
-    fi
-    
-    # Clean up platform-specific test directories
-    for platform in ubuntu wsl macos; do
-        if [ -n "$test_dir" ] && [ -d "$test_dir" ]; then
-            rm -rf "$test_dir"
-        fi
-    done
-    
-    # Destroy VMs if cleanup flag is set
-    if [ "$CLEANUP" = "true" ]; then
-        for platform in ubuntu wsl macos; do
-            if vagrant status $platform 2>/dev/null | grep -q "$platform"; then
-                echo -e "${YELLOW}Destroying $platform VM...${NC}"
-                vagrant destroy -f $platform &>/dev/null
-            fi
-        done
-    fi
-    
-    exit $exit_code
-}
+# Default values
+CLEAN_ONLY=false
+PLATFORMS=("ubuntu" "wsl" "macos")
+FAILED_PLATFORMS=()
+TEMP_DIR_PREFIX="tmp"
 
-trap cleanup EXIT INT TERM
-
-# Function to install prerequisites
-install_prerequisites() {
-    echo -e "${YELLOW}Checking and installing prerequisites...${NC}"
-    
-    # Check for Vagrant
-    if ! command -v vagrant &> /dev/null; then
-        echo "Installing Vagrant..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            brew install vagrant
-        else
-            curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-            sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-            sudo apt-get update && sudo apt-get install vagrant
-        fi
-    fi
-
-    # Check for VirtualBox
-    if ! command -v VBoxManage &> /dev/null; then
-        echo "Installing VirtualBox..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            brew install --cask virtualbox
-        else
-            sudo apt-get update && sudo apt-get install virtualbox
-        fi
-    fi
-
-    # Install required Vagrant plugins
-    echo "Installing Vagrant plugins..."
-    vagrant plugin install vagrant-vbguest
-}
-
-# Function to cleanup VMs
-cleanup_vms() {
-    local platform=$1
-    local force=$2
-    
-    echo -e "${YELLOW}Cleaning up $platform environment...${NC}"
-    
-    # Check if VM exists
-    if vagrant status $platform 2>/dev/null | grep -q "$platform"; then
-        if [ "$force" = "true" ] || [ "$CLEANUP" = "true" ]; then
-            vagrant destroy -f $platform &>/dev/null
-            echo -e "${GREEN}✓ Cleaned up $platform environment${NC}"
-        else
-            echo -e "${YELLOW}⚠ $platform VM left intact for debugging${NC}"
-            echo "To destroy manually, run: vagrant destroy -f $platform"
-        fi
-    fi
-}
-
-# Function to run tests for a specific platform
-run_platform_tests() {
-    platform=$1
-    echo -e "${YELLOW}Testing $platform environment...${NC}"
-    
-    # Create a temporary directory for this platform's test
-    test_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vagrant-test')
-    
-    if [ ! -d "$test_dir" ]; then
-        echo -e "${RED}Failed to create temporary directory${NC}"
-        return 1
-    fi
-    
-    script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    
-    # Create Vagrantfile for specific platform
-    if [ "$platform" = "ubuntu" ]; then
-        box="generic/ubuntu2204"
-    elif [ "$platform" = "wsl" ]; then
-        box="generic/ubuntu2204"  # Using Ubuntu for WSL testing
-    else
-        box="generic/ubuntu2204"  # Default to Ubuntu
-    fi
-    
-    cat > "$test_dir/Vagrantfile" << EOL
-Vagrant.configure("2") do |config|
-  config.vm.box = "$box"
-  
-  config.vm.provider "virtualbox" do |vb|
-    vb.memory = "2048"
-    vb.cpus = 2
-  end
-  
-  config.vm.synced_folder ".", "/vagrant", type: "virtualbox"
-  config.vm.synced_folder "$script_dir", "/ansible-role-personal"
-  
-  config.vm.provision "ansible_local" do |ansible|
-    ansible.provisioning_path = "/ansible-role-personal"
-    ansible.playbook = "tests/test.yml"
-    ansible.galaxy_role_file = "tests/requirements.yml"
-    ansible.become = true
-  end
-end
-EOL
-    
-    cd "$test_dir" || return 1
-    
-    echo -e "${GREEN}Starting Vagrant for $platform...${NC}"
-    if ! vagrant up; then
-        echo -e "${RED}Vagrant up failed for $platform${NC}"
-        cd - > /dev/null || return 1
-        return 1
-    fi
-    
-    echo -e "${GREEN}Running tests for $platform...${NC}"
-    if ! vagrant provision; then
-        echo -e "${RED}Tests failed for $platform${NC}"
-        cd - > /dev/null || return 1
-        return 1
-    fi
-    
-    cd - > /dev/null || return 1
-    return 0
-}
-
-# Function to clean up VirtualBox environment
-cleanup_virtualbox() {
-    echo -e "${YELLOW}Cleaning up VirtualBox environment...${NC}"
-    # Get list of VMs and clean them up
-    local vms=$(vboxmanage list vms | awk -F'"' '{print $2}')
-    for vm in $vms; do
-        if [[ $vm == tmp* ]]; then
-            echo "Removing stale VM: $vm"
-            vboxmanage controlvm "$vm" poweroff 2>/dev/null || true
-            vboxmanage unregistervm "$vm" --delete 2>/dev/null || true
-        fi
+function cleanup() {
+    echo "Cleaning up..."
+    for platform in "${PLATFORMS[@]}"; do
+        rm -rf "${TEMP_DIR_PREFIX}"*
+        vagrant destroy -f "$platform" > /dev/null 2>&1 || true
     done
 }
 
-check_virtualbox() {
+function check_virtualbox() {
     echo "Checking VirtualBox status..."
-    if ! command -v VBoxManage &> /dev/null; then
-        echo "VBoxManage not found. Please install VirtualBox."
-        return 1
-    fi
-
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
         echo "Loading VirtualBox kernel extensions..."
-        # First try loading normally
-        sudo kextload -b org.virtualbox.kext.VBoxDrv 2>/dev/null || true
-        sudo kextload -b org.virtualbox.kext.VBoxNetFlt 2>/dev/null || true
-        sudo kextload -b org.virtualbox.kext.VBoxNetAdp 2>/dev/null || true
-        sudo kextload -b org.virtualbox.kext.VBoxUSB 2>/dev/null || true
-        
-        # Check if modules are loaded
         if ! kextstat | grep -q "org.virtualbox.kext.VBoxDrv"; then
-            echo "VirtualBox kernel modules not loaded. Try reinstalling VirtualBox:"
-            echo "brew reinstall virtualbox"
-            return 1
+            echo "VirtualBox kernel extensions not loaded. Attempting to load..."
+            sudo kextload /Library/Application\ Support/VirtualBox/VBoxDrv.kext || {
+                echo -e "${RED}Failed to load VirtualBox kernel extensions.${NC}"
+                echo "Please try the following steps:"
+                echo "1. Open System Settings > Privacy & Security"
+                echo "2. Scroll down and look for blocked system extensions"
+                echo "3. Allow the Oracle extensions"
+                echo "4. Restart your computer"
+                echo "Or reinstall VirtualBox:"
+                echo "brew reinstall virtualbox"
+                exit 1
+            }
+            echo "Waiting for kernel extensions to load..."
+            sleep 5
         fi
     fi
+}
 
-    # Test VBoxManage
-    if ! VBoxManage --version >/dev/null 2>&1; then
-        echo "VirtualBox is not functioning properly. Please check your installation."
-        return 1
+function install_prerequisites() {
+    echo "Checking and installing prerequisites..."
+    
+    # Install Vagrant plugins
+    echo "Installing Vagrant plugins..."
+    if ! vagrant plugin list | grep -q "vagrant-vbguest"; then
+        echo "Installing the 'vagrant-vbguest' plugin. This can take a few minutes..."
+        vagrant plugin install vagrant-vbguest
     fi
 
+    check_virtualbox
+}
+
+function run_test() {
+    local platform=$1
+    local temp_dir="${TEMP_DIR_PREFIX}$(openssl rand -hex 6)"
+    
+    echo "Testing ${platform} environment..."
+    mkdir -p "$temp_dir"
+    cp -r . "$temp_dir/"
+    cd "$temp_dir"
+    
+    echo "Starting Vagrant for ${platform}..."
+    if ! VAGRANT_CWD="$temp_dir" vagrant up "$platform"; then
+        echo -e "${RED}Vagrant up failed for ${platform}${NC}"
+        FAILED_PLATFORMS+=("$platform")
+        return 1
+    fi
+    
+    echo "Running Ansible playbook for ${platform}..."
+    if ! VAGRANT_CWD="$temp_dir" vagrant provision "$platform"; then
+        echo -e "${RED}Ansible playbook failed for ${platform}${NC}"
+        FAILED_PLATFORMS+=("$platform")
+        return 1
+    fi
+    
+    echo -e "${GREEN}Tests passed for ${platform}${NC}"
     return 0
 }
 
-# Main testing function
-main() {
-    # Check for cleanup flag
-    CLEANUP=false
-    while getopts "c" opt; do
-        case $opt in
-            c) CLEANUP=true ;;
-            \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
-        esac
-    done
-    shift $((OPTIND-1))
+# Main execution
+if [[ "${1:-}" == "-c" ]]; then
+    CLEAN_ONLY=true
+fi
 
-    # Install prerequisites
-    install_prerequisites
+if [[ "$CLEAN_ONLY" == true ]]; then
+    cleanup
+    exit 0
+fi
 
-    # Check VirtualBox status
-    check_virtualbox
-    
-    # Clean up any stale VirtualBox VMs
-    cleanup_virtualbox
+trap cleanup EXIT
 
-    echo -e "${YELLOW}Starting tests for all platforms...${NC}"
-    
-    # Run tests for each platform sequentially
-    local failed_platforms=()
-    
-    for platform in ubuntu wsl macos; do
-        echo -e "${YELLOW}Testing $platform environment...${NC}"
-        if ! run_platform_tests "$platform"; then
-            failed_platforms+=("$platform")
-            if [ "$CLEANUP" = "true" ]; then
-                echo -e "${YELLOW}Cleaning up $platform environment...${NC}"
-                (cd "$test_dir" && vagrant destroy -f)
-            fi
-        fi
-        # Clean up VirtualBox VM regardless of test result
-        cleanup_virtualbox
-        # Give VirtualBox time to clean up
-        sleep 5
-    done
-    
-    # Report results
-    local failed_count=${#failed_platforms[@]}
-    if [ $failed_count -gt 0 ]; then
-        echo -e "${RED}✗ $failed_count tests failed: ${failed_platforms[*]}${NC}"
-        echo "Check the logs for details."
-        if [ "$CLEANUP" != "true" ]; then
-            echo "Failed environments have been left intact for debugging."
-            echo "To clean up all environments, run: ./test.sh -c"
-            echo "To clean up a specific environment, run: vagrant destroy -f <platform>"
-        fi
-        exit 1
-    else
-        echo -e "${GREEN}✓ All tests passed${NC}"
-        if [ "$CLEANUP" = "true" ]; then
-            cleanup_vms
-        fi
-        exit 0
+install_prerequisites
+
+echo "Starting tests for all platforms..."
+for platform in "${PLATFORMS[@]}"; do
+    echo "Testing ${platform} environment..."
+    if ! run_test "$platform"; then
+        echo "Cleaning up VirtualBox environment..."
+        vagrant destroy -f "$platform" > /dev/null 2>&1 || true
     fi
-}
+done
 
-# Run main function
-main
+if [[ ${#FAILED_PLATFORMS[@]} -gt 0 ]]; then
+    echo -e "${RED}✗ ${#FAILED_PLATFORMS[@]} tests failed: ${FAILED_PLATFORMS[*]}${NC}"
+    echo "Check the logs for details."
+    echo "Failed environments have been left intact for debugging."
+    echo "To clean up all environments, run: ./test.sh -c"
+    echo "To clean up a specific environment, run: vagrant destroy -f <platform>"
+    exit 1
+else
+    echo -e "${GREEN}✓ All tests passed${NC}"
+fi
