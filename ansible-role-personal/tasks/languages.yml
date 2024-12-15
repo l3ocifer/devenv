@@ -111,9 +111,7 @@
   block:
     - name: Install rbenv on Linux
       package:
-        name: 
-          - rbenv
-          - ruby-build
+        name: rbenv
         state: present
       become: true
       when: is_linux
@@ -124,6 +122,19 @@
         state: present
       when: is_macos
     
+    - name: Ensure rbenv plugins directory exists
+      file:
+        path: "{{ ansible_env.HOME }}/.rbenv/plugins"
+        state: directory
+        mode: '0755'
+
+    - name: Clone ruby-build plugin
+      git:
+        repo: https://github.com/rbenv/ruby-build.git
+        dest: "{{ ansible_env.HOME }}/.rbenv/plugins/ruby-build"
+        version: master
+        update: yes
+
     - name: Initialize rbenv
       shell: |
         eval "$(rbenv init -)"
@@ -133,11 +144,8 @@
     - name: Install Ruby version
       shell: |
         eval "$(rbenv init -)"
-        if ! rbenv install --list | grep -q "^{{ languages.ruby.version | default('3.2.2') }}$"; then
-          git -C "$(rbenv root)"/plugins/ruby-build pull
-        fi
-        rbenv install {{ languages.ruby.version | default('3.2.2') }} -s
-        rbenv global {{ languages.ruby.version | default('3.2.2') }}
+        rbenv install {{ languages.ruby.version | default('3.2.2') }} -s || rbenv install 3.2.2 -s
+        rbenv global {{ languages.ruby.version | default('3.2.2') }} || rbenv global 3.2.2
       args:
         executable: /bin/bash
         creates: "{{ ansible_env.HOME }}/.rbenv/versions/{{ languages.ruby.version | default('3.2.2') }}"
