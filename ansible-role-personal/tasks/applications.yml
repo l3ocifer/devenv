@@ -8,7 +8,7 @@
 
 # Mac App Store Applications
 - name: Check if Mac App Store apps are installed
-  shell: "mas list | grep -w '{{ item.id }}' || true"
+  shell: "mas list | awk '{print $1}' | grep -x '{{ item.id }}' || true"
   register: mas_check
   changed_when: false
   with_items: "{{ macos_apps | selectattr('id', 'defined') | list }}"
@@ -57,9 +57,9 @@
 
 # Homebrew Cask Applications
 - name: Check if Homebrew cask apps are installed
-  shell: "brew list --cask | grep -w '^{{ item.brew }}$' || true"
-  register: brew_check
-  changed_when: false
+  stat:
+    path: "/Applications/{{ item.name }}.app"
+  register: app_check
   with_items: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
   when: is_macos
   tags: ['apps']
@@ -69,8 +69,10 @@
     name: "{{ item.item.brew }}"
     state: present
     greedy: true
-  with_items: "{{ brew_check.results }}"
-  when: is_macos and item.stdout == ''
+  with_items: "{{ app_check.results }}"
+  when: is_macos and not item.stat.exists and not ansible_check_mode
+  failed_when: false
+  ignore_errors: yes
   tags: ['apps']
 
 # Direct Download Applications
@@ -97,9 +99,10 @@
 
 # CLI Tools Installation
 - name: Check if CLI tools are installed
-  shell: "brew list --formula | grep -w '^{{ item }}$' || true"
+  command: "brew list --formula {{ item }}"
   register: cli_check
   changed_when: false
+  failed_when: false
   with_items:
     - thefuck
     - starship
@@ -128,6 +131,8 @@
     - direnv
     - vim
     - git
+    - colima
+    - podman
   when: is_macos
   tags: ['cli']
 
@@ -136,7 +141,7 @@
     name: "{{ item.item }}"
     state: present
   with_items: "{{ cli_check.results }}"
-  when: is_macos and item.stdout == ''
+  when: is_macos and item.rc != 0 and not ansible_check_mode
   tags: ['cli']
 
 # Linux Applications
