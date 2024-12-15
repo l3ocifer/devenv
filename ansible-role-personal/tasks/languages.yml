@@ -1,17 +1,17 @@
 ---
 # Common Development Tools
-- name: Check if development tools are installed
+- name: Check if CLI tools are installed
   command: "brew list --formula {{ item.name }}"
-  register: dev_tools_check
+  register: cli_check
   changed_when: false
   failed_when: false
   no_log: true
-  loop: "{{ development_tools }}"
+  loop: "{{ cli_tools }}"
   loop_control:
     label: "{{ item.name }}"
   tags: ['languages']
 
-- name: Install development tools
+- name: Install CLI tools
   community.general.homebrew:
     name: "{{ item.item.packages }}"
     state: present
@@ -19,7 +19,7 @@
     HOMEBREW_NO_AUTO_UPDATE: 1
     HOMEBREW_NO_INSTALL_CLEANUP: 1
     HOMEBREW_NO_ENV_HINTS: 1
-  loop: "{{ dev_tools_check.results }}"
+  loop: "{{ cli_check.results }}"
   when: is_macos and item.rc != 0 and not ansible_check_mode
   loop_control:
     label: "{{ item.item.name }}"
