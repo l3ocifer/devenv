@@ -20,22 +20,31 @@
   tags: ['apps']
 
 - name: Check Mac App Store registration
-  shell: "mas list | grep -w '{{ item.item.id }}' || true"
-  register: mas_reg_check
+  ansible.builtin.command: mas list
+  register: mas_list
   changed_when: false
-  with_items: "{{ mas_app_check.results }}"
-  when: is_macos and not item.stat.exists
-  tags: ['apps']
+  check_mode: no
+  tags: ['mas']
 
 - name: Install Mac App Store applications
   community.general.mas:
-    id: "{{ item.item.item.id }}"
+    id: "{{ item.id }}"
     state: present
-  with_items: "{{ mas_reg_check.results }}"
-  when: is_macos and not ansible_check_mode and item.stdout == ''
-  no_log: "{{ not ansible_verbosity | bool }}"
-  ignore_errors: yes
-  tags: ['apps']
+  loop: "{{ macos_mas_apps }}"
+  when: 
+    - item.id is defined
+    - item.id | string not in mas_list.stdout
+  register: mas_installation
+  tags: ['mas']
+
+- name: Display Mac App Store installation status
+  ansible.builtin.debug:
+    verbosity: 1
+    msg: "{{ item.name }} {{ 'installed' if item.changed else 'already present' }}"
+  loop: "{{ mas_installation.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: ['mas']
 
 # Ensure config directories exist
 - name: Ensure config directories exist
