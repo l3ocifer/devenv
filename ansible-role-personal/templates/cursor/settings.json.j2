@@ -1,15 +1,12 @@
 {
   "terminal.integrated.scrollback": 9999,
+  "terminal.integrated.fontFamily": "{{ terminal_font | default('JetBrains Mono') }}",
+  "terminal.integrated.fontSize": {{ terminal_font_size | default(14) }},
+  "editor.fontFamily": "{{ editor_font | default('JetBrains Mono') }}",
+  "editor.fontSize": {{ editor_font_size | default(14) }},
   "telemetry.telemetryLevel": "off",
   "update.mode": "manual",
   "security.workspace.trust.enabled": false,
-  "editor.fontFamily": "JetBrains Mono",
-  "editor.fontSize": 14,
-  "editor.lineHeight": 1.5,
-  "editor.renderWhitespace": "boundary",
-  "editor.rulers": [80, 100],
-  "editor.formatOnSave": true,
-  "files.trimTrailingWhitespace": true,
-  "files.insertFinalNewline": true,
-  "files.trimFinalNewlines": true
+  "editor.minimap.enabled": false,
+  "vim.useSystemClipboard": true
 }
