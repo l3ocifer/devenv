@@ -5,36 +5,28 @@
       community.general.homebrew_cask:
         name: syncthing
         state: present
-        install_options: 'force'  # Ensures we get the latest cask version
       when: is_macos
       
-    - name: Install Syncthing (Ubuntu/Debian)
-      apt:
-        name: syncthing
-        state: present
-      when: is_linux and not is_wsl
-      become: true
-      
-    - name: Add Syncthing repository key (WSL)
-      apt_key:
-        url: https://syncthing.net/release-key.txt
-        state: present
-      when: is_wsl
-      become: true
-      
-    - name: Add Syncthing repository (WSL)
-      apt_repository:
-        repo: deb https://apt.syncthing.net/ syncthing stable
-        state: present
-      when: is_wsl
-      become: true
-      
-    - name: Install Syncthing (WSL)
-      apt:
-        name: syncthing
-        state: present
-        update_cache: yes
-      when: is_wsl
+    - name: Install Syncthing (Linux)
+      block:
+        - name: Add Syncthing repository key
+          apt_key:
+            url: https://syncthing.net/release-key.txt
+            state: present
+          when: is_wsl
+          
+        - name: Add Syncthing repository
+          apt_repository:
+            repo: deb https://apt.syncthing.net/ syncthing stable
+            state: present
+          when: is_wsl
+          
+        - name: Install Syncthing package
+          apt:
+            name: syncthing
+            state: present
+            update_cache: yes
+      when: is_linux
       become: true
   tags: ['syncthing']
 
@@ -51,12 +43,12 @@
 - name: Update secrets file with Syncthing API key
   blockinfile:
     path: "{{ secrets_file }}"
-    marker: "# {mark} SYNCTHING CONFIGURATION"
+    create: yes
+    mode: '0600'
     block: |
-      app_secrets:
-        syncthing:
-          api_key: "{{ app_secrets.syncthing.api_key }}"
-  when: app_secrets.syncthing is not defined or app_secrets.syncthing.api_key is not defined
+      syncthing_api_key: "{{ syncthing_api_key | default(lookup('password', '/dev/null chars=ascii_letters,digits length=32')) }}"
+      syncthing_secrets_folder_id: "{{ syncthing_secrets_folder_id | default(lookup('password', '/dev/null chars=ascii_letters,digits length=32')) }}"
+  tags: ['syncthing']
 
 - name: Configure Syncthing
   template:
@@ -65,48 +57,32 @@
     mode: '0600'
   tags: ['syncthing']
 
-- name: Check Syncthing service status
-  shell: |
-    pgrep -f syncthing || (launchctl list | grep syncthing)
-  register: syncthing_check
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Start Syncthing service
+- name: Configure Syncthing service
   block:
-    - name: Create Syncthing LaunchAgent (MacOS)
+    - name: Create LaunchAgent directory
+      file:
+        path: ~/Library/LaunchAgents
+        state: directory
+        mode: '0755'
+      when: is_macos
+
+    - name: Install Syncthing LaunchAgent
       template:
         src: syncthing.plist.j2
-        dest: ~/Library/LaunchAgents/syncthing.plist
+        dest: ~/Library/LaunchAgents/net.syncthing.syncthing.plist
         mode: '0644'
-      when: ansible_os_family == "Darwin"
-      
-    - name: Start Syncthing service (MacOS)
-      command: "launchctl load -w ~/Library/LaunchAgents/syncthing.plist"
-      when: ansible_os_family == "Darwin"
-      ignore_errors: yes
-      
-    - name: Enable and start Syncthing service (Linux)
+      when: is_macos
+      register: launchagent
+
+    - name: Load Syncthing LaunchAgent
+      command: launchctl load ~/Library/LaunchAgents/net.syncthing.syncthing.plist
+      when: is_macos and launchagent.changed
+
+    - name: Start Syncthing service
       systemd:
         name: syncthing@{{ ansible_user_id }}
-        enabled: yes
         state: started
-      when: is_linux and not is_wsl
-      become: true
-      
-    - name: Create Syncthing service file (WSL)
-      template:
-        src: syncthing.service.j2
-        dest: ~/.config/systemd/user/syncthing.service
-        mode: '0644'
-      when: is_wsl
-      
-    - name: Start Syncthing service (WSL)
-      systemd:
-        name: syncthing
         enabled: yes
-        state: started
         scope: user
-      when: is_wsl
+      when: is_linux and not is_wsl
   tags: ['syncthing']

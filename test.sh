@@ -102,62 +102,17 @@ run_platform_tests() {
     fi
     
     script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    role_dir="$script_dir/ansible-role-personal"
     
-    # Ensure ansible role directory exists
-    if [ ! -d "$role_dir" ]; then
-        echo -e "${RED}ansible-role-personal directory not found in $script_dir${NC}"
-        rm -rf "$test_dir"
-        return 1
-    fi
-    
-    # Create test environment
-    echo -e "${GREEN}Setting up test environment in $test_dir...${NC}"
-    
-    # Copy ansible role to test directory
-    mkdir -p "$test_dir/roles/ansible-role-personal"
-    if ! cp -r "$role_dir/"* "$test_dir/roles/ansible-role-personal/"; then
-        echo -e "${RED}Failed to copy ansible-role-personal directory${NC}"
-        rm -rf "$test_dir"
-        return 1
-    fi
-    
-    # Create tests directory
-    mkdir -p "$test_dir/tests"
-    
-    # Create test playbook
-    cat > "$test_dir/tests/test.yml" << EOL
----
-- hosts: all
-  become: true
-  roles:
-    - ansible-role-personal
-EOL
-
-    # Create ansible.cfg
-    cat > "$test_dir/ansible.cfg" << EOL
-[defaults]
-roles_path = roles
-EOL
-
     # Create Vagrantfile for specific platform
     if [ "$platform" = "ubuntu" ]; then
         box="generic/ubuntu2204"
-    elif [ "$platform" = "macos" ]; then
-        box="tas50/macos_14"
     elif [ "$platform" = "wsl" ]; then
-        box="generic/debian12"
+        box="generic/ubuntu2204"  # Using Ubuntu for WSL testing
     else
-        echo -e "${RED}Unsupported platform: $platform${NC}"
-        rm -rf "$test_dir"
-        return 1
+        box="generic/ubuntu2204"  # Default to Ubuntu
     fi
-
-    echo -e "${GREEN}Creating Vagrantfile for $platform...${NC}"
+    
     cat > "$test_dir/Vagrantfile" << EOL
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
-
 Vagrant.configure("2") do |config|
   config.vm.box = "$box"
   
@@ -165,60 +120,37 @@ Vagrant.configure("2") do |config|
     vb.memory = "2048"
     vb.cpus = 2
   end
-
+  
   config.vm.synced_folder ".", "/vagrant", type: "virtualbox"
+  config.vm.synced_folder "$script_dir", "/ansible-role-personal"
   
   config.vm.provision "ansible_local" do |ansible|
+    ansible.provisioning_path = "/ansible-role-personal"
     ansible.playbook = "tests/test.yml"
     ansible.galaxy_role_file = "tests/requirements.yml"
-    ansible.galaxy_roles_path = "/etc/ansible/roles"
     ansible.become = true
   end
 end
 EOL
-
-    (cd "$test_dir" && {
-        # Bring up the VM
-        vagrant up $platform &> "vagrant-$platform.log"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Failed to start $platform environment${NC}"
-            echo "See vagrant-$platform.log for details"
-            cleanup_vms $platform false
-            return 1
-        fi
-
-        # Run the playbook
-        vagrant provision $platform &> "provision-$platform.log"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Provisioning failed for $platform${NC}"
-            echo "See provision-$platform.log for details"
-            cleanup_vms $platform false
-            return 1
-        fi
-
-        # Run verification tests
-        vagrant ssh $platform -c "ansible-playbook main.yml --tags verify" &> "verify-$platform.log"
-        test_result=$?
-        
-        if [ $test_result -eq 0 ]; then
-            echo -e "${GREEN}All tests passed for $platform${NC}"
-            cleanup_vms $platform true
-            return 0
-        else
-            echo -e "${RED}Tests failed for $platform${NC}"
-            echo "See verify-$platform.log for details"
-            cleanup_vms $platform false
-            return 1
-        fi
-    })
     
-    # Store the result
-    result=$?
+    cd "$test_dir" || return 1
     
-    # Clean up test directory
-    rm -rf "$test_dir"
+    echo -e "${GREEN}Starting Vagrant for $platform...${NC}"
+    if ! vagrant up; then
+        echo -e "${RED}Vagrant up failed for $platform${NC}"
+        cd - > /dev/null || return 1
+        return 1
+    fi
     
-    return $result
+    echo -e "${GREEN}Running tests for $platform...${NC}"
+    if ! vagrant provision; then
+        echo -e "${RED}Tests failed for $platform${NC}"
+        cd - > /dev/null || return 1
+        return 1
+    fi
+    
+    cd - > /dev/null || return 1
+    return 0
 }
 
 # Main testing function

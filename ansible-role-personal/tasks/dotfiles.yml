@@ -37,15 +37,42 @@
   changed_when: add_remote.rc == 0
   tags: ['dotfiles']
 
+- name: Ensure config directories exist
+  file:
+    path: "{{ '~/' | expanduser }}{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - ".config/zsh"
+    - ".config/git"
+    - ".config/cursor"
+    - ".config/zed"
+    - ".config/pulsar"
+    - ".config/logseq"
+  tags: ['dotfiles']
+
 - name: Check existing dotfiles
   stat:
     path: "{{ '~/dotfiles' | expanduser }}/{{ item.dest }}"
   register: "existing_dotfiles"
   with_items:
+    # Core configs
     - { src: "templates/inputrc.j2", dest: ".inputrc" }
     - { src: "templates/zshrc.j2", dest: ".zshrc" }
     - { src: "templates/gitconfig.j2", dest: ".gitconfig" }
     - { src: "templates/gitconfig-provisions.j2", dest: ".gitconfig-provisions" }
+    # Shell configs
+    - { src: "templates/zsh/aliases.j2", dest: ".config/zsh/aliases" }
+    - { src: "templates/zsh/exports.j2", dest: ".config/zsh/exports" }
+    # Git configs
+    - { src: "templates/git/config.j2", dest: ".config/git/config" }
+    # SSH configs
+    - { src: "templates/ssh/config.j2", dest: ".ssh/config" }
+    # Application configs
+    - { src: "templates/cursor/settings.json.j2", dest: ".config/cursor/settings.json" }
+    - { src: "templates/zed/settings.json.j2", dest: ".config/zed/settings.json" }
+    - { src: "templates/pulsar/config.cson.j2", dest: ".config/pulsar/config.cson" }
+    - { src: "templates/logseq/config.edn.j2", dest: ".config/logseq/config.edn" }
   no_log: true
   loop_control:
     label: "{{ item.dest }}"
@@ -59,6 +86,15 @@
     backup: yes
     force: no
   when: not item.stat.exists
+  loop: "{{ existing_dotfiles.results }}"
+  tags: ['dotfiles']
+
+- name: Create symlinks for config files
+  file:
+    src: "{{ '~/dotfiles' | expanduser }}/{{ item.item.dest }}"
+    dest: "{{ '~/' | expanduser }}{{ item.item.dest }}"
+    state: link
+    force: true
   loop: "{{ existing_dotfiles.results }}"
   tags: ['dotfiles']
 
@@ -90,27 +126,6 @@
     backup: yes
     force: no
   when: not post_commit_stat.stat.exists
-  tags: ['dotfiles']
-
-- name: Check existing symlinks
-  stat:
-    path: "~/{{ item.dest }}"
-  register: "existing_symlinks"
-  with_items:
-    - .inputrc
-    - .zshrc
-    - .gitconfig
-    - .gitconfig-provisions
-  tags: ['dotfiles']
-
-- name: Create symlinks
-  file:
-    src: "{{ '~/dotfiles' | expanduser }}/{{ item.item.dest }}"
-    dest: "~/{{ item.item.dest }}"
-    state: link
-    force: no
-  loop: "{{ existing_symlinks.results }}"
-  when: not item.stat.exists
   tags: ['dotfiles']
 
 - name: Configure git for dotfiles

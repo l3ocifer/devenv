@@ -21,62 +21,47 @@
     scope: global
     value: "{{ item.value }}"
   loop:
-    - { name: 'user.name', value: '{{ git_user_name | default("l3ocifer") }}' }
-    - { name: 'user.email', value: '{{ git_user_email | default("lpask001@gmail.com") }}' }
+    - { name: 'user.name', value: '{{ git_user_name }}' }
+    - { name: 'user.email', value: '{{ git_user_email }}' }
     - { name: 'http.postBuffer', value: '524288000' }
-    - { name: 'credential.helper', value: 'cache --timeout=604800' }
+    - { name: 'credential.helper', value: '{{ "osxkeychain" if is_macos else "cache --timeout=604800" }}' }
     - { name: 'core.autocrlf', value: 'input' }
     - { name: 'core.longpaths', value: 'true' }
     - { name: 'pull.rebase', value: 'true' }
+    - { name: 'init.defaultBranch', value: 'main' }
   loop_control:
     label: "{{ item.name }}"
   tags: ['git']
 
-# Configure Git SSH command
-- name: Check for SSH keys in secrets
-  set_fact:
-    available_ssh_keys: "{{ ssh_keys | default([]) | map(attribute='name') | list }}"
-  tags: ['git']
-
+# SSH configuration
 - name: Configure Git SSH command
   git_config:
     name: core.sshCommand
     scope: global
     value: >-
-      ssh -i {{ '~/.ssh/leo-personal' | expanduser }}
-      {% for key in ssh_keys | default([]) %}
-      {% if key.name != 'leo-personal' %}
+      ssh
+      {%- for key in ssh_keys | default([]) %}
       -i {{ '~/.ssh/' ~ key.name | expanduser }}
-      {% endif %}
-      {% endfor %}
-      -o IdentitiesOnly=yes
-  when: "'leo-personal' in available_ssh_keys"
+      {%- endfor %}
+  when: ssh_keys is defined and ssh_keys | length > 0
   tags: ['git']
 
-# Client-specific git configurations
-- name: Create client-specific git configs
-  template:
-    src: "gitconfig-client.j2"
-    dest: "{{ '~/.config/git/includes/gitconfig-' | expanduser }}{{ item.name }}"
-    mode: '0644'
-    backup: yes
-    force: no
-  loop: "{{ git_client_configs | default([]) }}"
-  tags: ['git']
-
-# Clone repositories
-- name: Clone or update devenv repository
+# Repository setup
+- name: Clone devenv repository
   git:
-    repo: "{{ repositories.devenv.repo }}"
-    dest: "{{ repositories.devenv.dest | expanduser }}"
-    update: yes
-    force: no
+    repo: "{{ devenv_repo }}"
+    dest: "{{ devenv_dir }}"
+    version: "{{ devenv_version | default('main') }}"
+  when: devenv_repo is defined
   tags: ['git']
 
-- name: Clone or update scripts repository
+- name: Clone personal repositories
   git:
-    repo: "{{ repositories.scripts.repo }}"
-    dest: "{{ repositories.scripts.dest | expanduser }}"
-    update: yes
-    force: no
+    repo: "{{ item.repo }}"
+    dest: "{{ git_base_dir }}/{{ item.name }}"
+    version: "{{ item.version | default('main') }}"
+  loop: "{{ git_repos | default([]) }}"
+  when: git_repos is defined
+  loop_control:
+    label: "{{ item.name }}"
   tags: ['git']
