@@ -19,6 +19,19 @@ scripts_repo: "https://github.com/l3ocifer/scripts.git"
 ssh_config_dir: "~/.ssh"
 ssh_keys: []
 
+# Application configuration symlinks
+config_symlinks:
+  - src: "~/.config/personal/cursor/settings.json"
+    dest: "~/Library/Application Support/Cursor/User/settings.json"
+  - src: "~/.config/personal/zed/settings/settings.json"
+    dest: "~/Library/Application Support/Zed/settings/settings.json"
+  - src: "~/.config/personal/windsurf/config/settings.json"
+    dest: "~/Library/Application Support/Windsurf/config/settings.json"
+  - src: "~/.config/personal/pulsar/config.cson"
+    dest: "~/.pulsar/config.cson"
+  - src: "~/.config/personal/logseq/config.edn"
+    dest: "~/.logseq/config.edn"
+
 # Mac OS Applications
 macos_apps:
   # Essential Development Tools
@@ -39,19 +52,24 @@ macos_apps:
 
 # Mac App Store Applications
 macos_mas_apps:
-  - { name: "ChatGPT", id: "6448311069" }
-  - { name: "Claude", id: "6470116884" }
-  - { name: "TestFlight", id: "899247664" }
-  - { name: "WYZE", id: "1288415553" }
-  
-  # System Tools
-  - { name: "Alacritty", brew: "alacritty" }
-  - { name: "OBS", brew: "obs" }
-  - { name: "VLC", brew: "vlc" }
-  - { name: "Miniconda", brew: "miniconda" }
-  
-  # AI Tools
-  - { name: "Wispr Flow", url: "https://wisprflow.com" }
+  - name: "ChatGPT"
+    id: "6448311069"
+  - name: "Claude"
+    id: "6470116884"
+  - name: "TestFlight"
+    id: "899247664"
+  - name: "WYZE"
+    id: "1288415553"
+  - name: "Alacritty"
+    brew: "alacritty"
+  - name: "OBS"
+    brew: "obs"
+  - name: "VLC"
+    brew: "vlc"
+  - name: "Miniconda"
+    brew: "miniconda"
+  - name: "Wispr Flow"
+    url: "https://wisprflow.com"
 
 # Programming Languages
 languages:

@@ -10,15 +10,7 @@
   when: is_macos
   tags: ['apps']
 
-# Mac App Store Applications
-- name: Check if Mac App Store apps exist in Applications
-  stat:
-    path: "/Applications/{{ item.name }}.app"
-  with_items: "{{ macos_mas_apps }}"
-  register: mas_app_check
-  when: is_macos
-  tags: ['apps']
-
+# Mac App Store
 - name: Check Mac App Store registration
   ansible.builtin.command: mas list
   register: mas_list
@@ -26,14 +18,19 @@
   check_mode: no
   tags: ['mas']
 
+- name: Check if Mac App Store apps exist
+  ansible.builtin.stat:
+    path: "/Applications/{{ item.name }}.app"
+  loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list }}"
+  register: mas_app_check
+  tags: ['mas']
+
 - name: Install Mac App Store applications
   community.general.mas:
-    id: "{{ item.id }}"
+    id: "{{ item.0.id }}"
     state: present
-  loop: "{{ macos_mas_apps }}"
-  when: 
-    - item.id is defined
-    - item.id | string not in mas_list.stdout
+  loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list | zip(mas_app_check.results) | list }}"
+  when: not item.1.stat.exists
   register: mas_installation
   ignore_errors: true
   tags: ['mas']
@@ -41,58 +38,54 @@
 - name: Display Mac App Store installation status
   ansible.builtin.debug:
     verbosity: 1
-    msg: "{{ item.item.name }} {{ 'installed' if item.changed else 'skipped (already exists or unavailable)' }}"
+    msg: "{{ item.item.0.name }} {{ 'installed' if item.changed else 'skipped (already exists or unavailable)' }}"
   loop: "{{ mas_installation.results }}"
   loop_control:
-    label: "{{ item.item.name }}"
+    label: "{{ item.item.0.name }}"
   when: item is defined and item.item is defined
   tags: ['mas']
 
-# Ensure config directories exist
-- name: Ensure config directories exist
-  file:
-    path: "{{ item }}"
+# Config Directories and Files
+- name: Ensure parent config directory exists
+  ansible.builtin.file:
+    path: "~/.config/personal"
     state: directory
     mode: '0755'
-  loop:
-    - "~/.config/personal/cursor"
-    - "~/.config/personal/zed"
-    - "~/.config/personal/windsurf"
-    - "~/.config/personal/pulsar"
-    - "~/.config/personal/logseq"
-  when: is_macos
-  tags: ['apps']
+  tags: ['config']
 
-# Copy application templates
-- name: Copy application templates
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+- name: Ensure application config directories exist
+  ansible.builtin.file:
+    path: "{{ item | dirname }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ config_symlinks | map(attribute='src') | map('expanduser') | list }}"
+  tags: ['config']
+
+- name: Create default config files if missing
+  ansible.builtin.copy:
+    content: "{}\n"
+    dest: "{{ item.src | expanduser }}"
+    force: false
     mode: '0644'
-  with_items:
-    - { src: "cursor/settings.json.j2", dest: "~/.config/personal/cursor/settings.json" }
-    - { src: "zed/settings.json.j2", dest: "~/.config/personal/zed/settings.json" }
-    - { src: "windsurf/settings.json.j2", dest: "~/.config/personal/windsurf/settings.json" }
-    - { src: "pulsar/config.cson.j2", dest: "~/.config/personal/pulsar/config.cson" }
-    - { src: "logseq/config.edn.j2", dest: "~/.config/personal/logseq/config.edn" }
-  when: is_macos
-  tags: ['apps']
+  loop: "{{ config_symlinks }}"
+  tags: ['config']
 
-# Create symlinks for application configs
+- name: Ensure target config directories exist
+  ansible.builtin.file:
+    path: "{{ item | dirname }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ config_symlinks | map(attribute='dest') | map('expanduser') | list }}"
+  tags: ['config']
+
 - name: Create symlinks for application configs
-  file:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+  ansible.builtin.file:
+    src: "{{ item.src | expanduser }}"
+    dest: "{{ item.dest | expanduser }}"
     state: link
-    force: yes
-  loop:
-    - { src: "~/.config/personal/cursor/settings.json", dest: "~/Library/Application Support/Cursor/User/settings.json" }
-    - { src: "~/.config/personal/zed/settings.json", dest: "~/Library/Application Support/Zed/settings/settings.json" }
-    - { src: "~/.config/personal/windsurf/settings.json", dest: "~/Library/Application Support/Windsurf/config/settings.json" }
-    - { src: "~/.config/personal/pulsar/config.cson", dest: "~/.pulsar/config.cson" }
-    - { src: "~/.config/personal/logseq/config.edn", dest: "~/.logseq/config.edn" }
-  when: is_macos
-  tags: ['apps']
+    force: true
+  loop: "{{ config_symlinks }}"
+  tags: ['config']
 
 # Homebrew Cask Applications
 - name: Check if Homebrew cask apps are installed
