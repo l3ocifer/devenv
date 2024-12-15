@@ -111,7 +111,9 @@
   block:
     - name: Install rbenv on Linux
       package:
-        name: rbenv
+        name: 
+          - rbenv
+          - ruby-build
         state: present
       become: true
       when: is_linux
@@ -131,11 +133,14 @@
     - name: Install Ruby version
       shell: |
         eval "$(rbenv init -)"
-        rbenv install {{ languages.ruby.version | default('3.2.0') }} -s
-        rbenv global {{ languages.ruby.version | default('3.2.0') }}
+        if ! rbenv install --list | grep -q "^{{ languages.ruby.version | default('3.2.2') }}$"; then
+          git -C "$(rbenv root)"/plugins/ruby-build pull
+        fi
+        rbenv install {{ languages.ruby.version | default('3.2.2') }} -s
+        rbenv global {{ languages.ruby.version | default('3.2.2') }}
       args:
         executable: /bin/bash
-        creates: "{{ ansible_env.HOME }}/.rbenv/versions/{{ languages.ruby.version | default('3.2.0') }}"
+        creates: "{{ ansible_env.HOME }}/.rbenv/versions/{{ languages.ruby.version | default('3.2.2') }}"
     
     - name: Install Ruby gems
       shell: |
