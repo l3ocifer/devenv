@@ -15,7 +15,6 @@
     - "~/.config/zsh"
     - "~/.config/syncthing"
     - "{{ ssh_config_dir }}"
-  no_log: true
   tags: ['verify', 'directories']
 
 - name: Verify essential files exist
@@ -29,7 +28,6 @@
     - "~/.ssh/config"
     - "~/.config/syncthing/config.xml"
     - "~/.zshrc"
-  no_log: true
   tags: ['verify', 'files']
 
 - name: Verify Syncthing is running

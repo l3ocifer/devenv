@@ -1,0 +1,10 @@
+---
+- name: Converge
+  hosts: all
+  tasks:
+    - name: Include ansible-role-personal
+      ansible.builtin.include_role:
+        name: ansible-role-personal
+      vars:
+        git_user_name: "Test User"
+        git_user_email: "test@example.com"

@@ -1,8 +1,0 @@
----
-- hosts: localhost
-  become: false
-  vars:
-    git_user_name: "Test User"
-    git_user_email: "test@example.com"
-  roles:
-    - role: ansible-role-personal
