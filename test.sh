@@ -94,10 +94,7 @@ run_platform_tests() {
     echo -e "${YELLOW}Testing $platform environment...${NC}"
     
     # Create a temporary directory for this platform's test
-    test_dir=$(mktemp -d 2>/dev/null)
-    if [ $? -ne 0 ]; then
-        test_dir=$(mktemp -d -t 'vagrant-test')
-    fi
+    test_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vagrant-test')
     
     if [ ! -d "$test_dir" ]; then
         echo -e "${RED}Failed to create temporary directory${NC}"
@@ -114,36 +111,35 @@ run_platform_tests() {
         return 1
     fi
     
-    # Copy files with error checking
-    echo -e "${GREEN}Copying files to $test_dir...${NC}"
+    # Create test environment
+    echo -e "${GREEN}Setting up test environment in $test_dir...${NC}"
     
-    # Create tests directory structure
-    mkdir -p "$test_dir/ansible-role-personal/tests"
-    
-    # Copy role files
-    if ! cp -r "$role_dir"/* "$test_dir/ansible-role-personal/"; then
+    # Copy ansible role to test directory
+    mkdir -p "$test_dir/roles/ansible-role-personal"
+    if ! cp -r "$role_dir/"* "$test_dir/roles/ansible-role-personal/"; then
         echo -e "${RED}Failed to copy ansible-role-personal directory${NC}"
         rm -rf "$test_dir"
         return 1
     fi
     
-    # Create test playbook if it doesn't exist
-    cat > "$test_dir/ansible-role-personal/tests/test.yml" << EOL
+    # Create tests directory
+    mkdir -p "$test_dir/tests"
+    
+    # Create test playbook
+    cat > "$test_dir/tests/test.yml" << EOL
 ---
 - hosts: all
   become: true
   roles:
     - ansible-role-personal
 EOL
-    
-    # Create requirements file if it doesn't exist
-    cat > "$test_dir/ansible-role-personal/tests/requirements.yml" << EOL
----
-roles: []
-collections:
-  - community.general
+
+    # Create ansible.cfg
+    cat > "$test_dir/ansible.cfg" << EOL
+[defaults]
+roles_path = roles
 EOL
-    
+
     # Create Vagrantfile for specific platform
     if [ "$platform" = "ubuntu" ]; then
         box="generic/ubuntu2204"
@@ -157,7 +153,6 @@ EOL
         return 1
     fi
 
-    # Create Vagrantfile
     echo -e "${GREEN}Creating Vagrantfile for $platform...${NC}"
     cat > "$test_dir/Vagrantfile" << EOL
 # -*- mode: ruby -*-
@@ -174,8 +169,8 @@ Vagrant.configure("2") do |config|
   config.vm.synced_folder ".", "/vagrant", type: "virtualbox"
   
   config.vm.provision "ansible_local" do |ansible|
-    ansible.playbook = "ansible-role-personal/tests/test.yml"
-    ansible.galaxy_role_file = "ansible-role-personal/tests/requirements.yml"
+    ansible.playbook = "tests/test.yml"
+    ansible.galaxy_role_file = "tests/requirements.yml"
     ansible.galaxy_roles_path = "/etc/ansible/roles"
     ansible.become = true
   end

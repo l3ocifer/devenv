@@ -61,25 +61,26 @@
 # Verify symlinks
 - name: Verify configuration symlinks
   stat:
-    path: "{{ item.dest }}"
+    path: "{{ item.dest | expanduser }}"
   register: symlink_check
   failed_when: not symlink_check.stat.exists or not symlink_check.stat.islnk
   with_items:
     # Shell configs
-    - { dest: "~/.zshrc" }
-    - { dest: "~/.config/zsh/aliases" }
-    - { dest: "~/.config/zsh/exports" }
+    - { dest: "~/.zshrc", required: true }
+    - { dest: "~/.config/zsh/aliases", required: true }
+    - { dest: "~/.config/zsh/exports", required: true }
     # Git configs
-    - { dest: "~/.gitconfig" }
-    - { dest: "~/.config/git/config" }
+    - { dest: "~/.gitconfig", required: true }
+    - { dest: "~/.config/git/config", required: true }
     # SSH configs
-    - { dest: "~/.ssh/config" }
-    # Application configs
-    - { dest: "~/.config/cursor/settings.json" }
-    - { dest: "~/.config/zed/settings.json" }
-    - { dest: "~/.config/pulsar/config.cson" }
-    - { dest: "~/.config/logseq/config.edn" }
-  no_log: true
+    - { dest: "~/.ssh/config", required: true }
+    # Application configs (optional)
+    - { dest: "~/.config/cursor/settings.json", required: false }
+    - { dest: "~/.config/zed/settings.json", required: false }
+    - { dest: "~/.config/pulsar/config.cson", required: false }
+    - { dest: "~/.config/logseq/config.edn", required: false }
+  no_log: false
+  ignore_errors: "{{ not item.required }}"
 
 # Verify SSH and Git functionality
 - name: Test SSH agent
