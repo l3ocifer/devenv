@@ -26,6 +26,24 @@ function is_arm_mac() {
     [[ "$(uname -m)" == "arm64" ]] && [[ "$(uname)" == "Darwin" ]]
 }
 
+function install_vagrant_plugin() {
+    local plugin=$1
+    if ! vagrant plugin list | grep -q "$plugin"; then
+        echo "Installing the '$plugin' plugin..."
+        # Try installing directly from RubyGems first
+        if ! vagrant plugin install "$plugin"; then
+            echo "Failed to install from RubyGems, trying alternative sources..."
+            if [[ "$plugin" == "vagrant-utm" ]]; then
+                # Install vagrant-utm directly from GitHub
+                vagrant plugin install vagrant-utm --plugin-source https://rubygems.org
+            else
+                echo -e "${RED}Failed to install plugin: $plugin${NC}"
+                return 1
+            fi
+        fi
+    fi
+}
+
 function check_virtualization() {
     echo "Checking virtualization status..."
     if [[ "$(uname)" == "Darwin" ]]; then
@@ -35,11 +53,8 @@ function check_virtualization() {
                 brew install --cask utm
             fi
             
-            # Install Vagrant UTM plugin if not present
-            if ! vagrant plugin list | grep -q "vagrant-utm"; then
-                echo "Installing vagrant-utm plugin..."
-                vagrant plugin install vagrant-utm
-            fi
+            # Install Vagrant UTM plugin
+            install_vagrant_plugin "vagrant-utm"
         else
             echo "Loading VirtualBox kernel extensions..."
             if ! kextstat | grep -q "org.virtualbox.kext.VBoxDrv"; then
@@ -65,11 +80,8 @@ function install_prerequisites() {
     
     # Install Vagrant plugins
     echo "Installing Vagrant plugins..."
-    if ! vagrant plugin list | grep -q "vagrant-vbguest"; then
-        echo "Installing the 'vagrant-vbguest' plugin. This can take a few minutes..."
-        vagrant plugin install vagrant-vbguest
-    fi
-
+    install_vagrant_plugin "vagrant-vbguest"
+    
     check_virtualization
 }
 
