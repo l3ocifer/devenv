@@ -35,10 +35,9 @@
   ignore_errors: true
   tags: ['mas']
 
-- name: Display Mac App Store installation status
+- name: Display Mac App Store status
   ansible.builtin.debug:
-    verbosity: 1
-    msg: "{{ item.item.0.name }} {{ 'installed' if item.changed else 'skipped (already exists or unavailable)' }}"
+    msg: "MAS: {{ item.item.0.name }} - {{ 'installed' if item.changed else 'exists' }}"
   loop: "{{ mas_installation.results }}"
   loop_control:
     label: "{{ item.item.0.name }}"
@@ -62,11 +61,37 @@
   register: brew_install
   tags: ['apps']
 
-- name: Display Homebrew installation status
+- name: Display Homebrew status
   ansible.builtin.debug:
-    verbosity: 1
-    msg: "{{ item.item.item.name }} {{ 'installed' if item.changed else 'exists' }}"
+    msg: "App: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
   loop: "{{ brew_install.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  tags: ['apps']
+
+# CLI Development Tools
+- name: Get list of installed CLI tools
+  ansible.builtin.command: "command -v {{ item.name }}"
+  loop: "{{ cli_dev_tools }}"
+  register: cli_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+  tags: ['apps']
+
+- name: Install missing CLI development tools
+  community.general.homebrew:
+    name: "{{ item.item.name }}"
+    state: present
+  loop: "{{ cli_check.results }}"
+  when: item.rc != 0
+  register: cli_install
+  tags: ['apps']
+
+- name: Display CLI tool status
+  ansible.builtin.debug:
+    msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ cli_install.results }}"
   loop_control:
     label: "{{ item.item.item.name }}"
   tags: ['apps']
@@ -79,10 +104,9 @@
   register: direct_check
   tags: ['apps']
 
-- name: Display direct download application status
+- name: Display direct download status
   ansible.builtin.debug:
-    verbosity: 1
-    msg: "{{ item.item.name }} {{ 'needs manual download from' if not item.stat.exists else 'exists' }}: {{ item.item.url }}"
+    msg: "URL: {{ item.item.name }} - {{ 'manual download required' if not item.stat.exists else 'exists' }}"
   loop: "{{ direct_check.results }}"
   loop_control:
     label: "{{ item.item.name }}"

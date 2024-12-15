@@ -61,10 +61,6 @@ macos_apps:
     brew: "logseq"
   - name: "Docker"
     brew: "docker"
-  - name: "Colima"
-    brew: "colima"
-  - name: "Podman"
-    brew: "podman"
   
   # Browsers
   - name: "Google Chrome"
@@ -77,6 +73,11 @@ macos_apps:
   # AI Tools
   - name: "Wispr Flow"
     url: "https://wisprflow.com"
+
+# CLI Development Tools
+cli_dev_tools:
+  - name: "colima"
+  - name: "podman"
 
 # Shell Tools
 shell_tools:
