@@ -53,7 +53,7 @@
             path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}/.git"
           loop: "{{ zsh_plugins }}"
           register: plugin_checks
-          failed_when: not ansible_loop_var.stat.exists
+          failed_when: not stat.exists
 
         - name: Check theme installation
           stat:
