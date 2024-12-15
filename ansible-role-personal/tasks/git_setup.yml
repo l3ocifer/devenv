@@ -63,16 +63,16 @@
 # Clone repositories
 - name: Clone or update devenv repository
   git:
-    repo: "{{ devenv_repo }}"
-    dest: "{{ devenv_dir | expanduser }}"
+    repo: "{{ repositories.devenv.repo }}"
+    dest: "{{ repositories.devenv.dest | expanduser }}"
     update: yes
     force: no
   tags: ['git']
 
 - name: Clone or update scripts repository
   git:
-    repo: "{{ scripts_repo }}"
-    dest: "{{ scripts_dir | expanduser }}"
+    repo: "{{ repositories.scripts.repo }}"
+    dest: "{{ repositories.scripts.dest | expanduser }}"
     update: yes
     force: no
   tags: ['git']
