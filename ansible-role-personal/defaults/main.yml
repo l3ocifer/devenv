@@ -130,7 +130,6 @@ cli_tools:
     packages:
       - "prometheus"
       - "grafana"
-      - "vector-bin"  # Log collector
       - "loki"    # Log aggregation
 
 # Programming Languages
