@@ -11,6 +11,7 @@
     - "~/.config/syncthing"
     - "~/git"
     - "~/.scripts"
+    - "~/.aws"
   failed_when: not dir_check.stat.exists
   tags: ['verify', 'directories']
 
@@ -24,6 +25,8 @@
     - "~/.ssh/config"
     - "~/.config/syncthing/config.xml"
     - "~/.zshrc"
+    - "~/.aws/config"
+    - "~/.aws/credentials"
   failed_when: not file_check.stat.exists
   tags: ['verify', 'files']
 
@@ -63,3 +66,4 @@
       - Directories: {{ (dir_check.results | map(attribute='stat.exists') | list) is all }}
       - Files: {{ (file_check.results | map(attribute='stat.exists') | list) is all }}
       - Git Config Files Present: {{ file_check.results | selectattr('item', 'match', '.*gitconfig.*') | map(attribute='stat.exists') | list is all }}
+      - AWS Files Present: {{ file_check.results | selectattr('item', 'match', '.*aws.*') | map(attribute='stat.exists') | list is all }}

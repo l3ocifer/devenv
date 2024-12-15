@@ -7,4 +7,10 @@
         name: ansible-role-personal
       vars:
         git_user_name: "l3ocifer"
-        git_user_email: "lpask001@gmail.com
+        git_user_email: "lpask001@gmail.com"
+        aws_profiles:
+          - name: default
+            region: us-east-1
+            output: json
+            access_key_id: "test-access-key"
+            secret_access_key: "test-secret-key"
