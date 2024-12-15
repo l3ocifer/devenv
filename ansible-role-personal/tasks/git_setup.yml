@@ -26,7 +26,6 @@
     - { name: 'core.autocrlf', value: 'input' }
     - { name: 'core.longpaths', value: 'true' }
     - { name: 'pull.rebase', value: 'true' }
-    - { name: 'url."git@github.com:".insteadOf', value: 'https://github.com/' }
   tags: ['git']
 
 # Configure Git SSH command
@@ -48,19 +47,6 @@
       {% endfor %}
       -o IdentitiesOnly=yes
   when: "'leo-personal' in available_ssh_keys"
-  tags: ['git']
-
-# Configure Git to use SSH by default
-- name: Configure Git to use SSH protocol
-  git_config:
-    name: url.{{ item.replace }}.insteadOf
-    scope: global
-    value: "{{ item.match }}"
-  loop: "{{ git_url_rewrites | default([
-    {'match': 'https://github.com/', 'replace': 'git@github.com:'},
-    {'match': 'https://dev.azure.com/', 'replace': 'git@ssh.dev.azure.com:v3/'},
-    {'match': 'https://bitbucket.org/', 'replace': 'git@bitbucket.org:'}
-  ]) }}"
   tags: ['git']
 
 # Client-specific git configurations
