@@ -49,6 +49,11 @@ macos_mas_apps:
     id: "1288415553"
 
 # macOS Applications
+macos_homebrew_apps:
+  - name: "1password-cli"
+    cask: false
+  - name: "act"
+    cask: false
 macos_apps:
   # Development Tools
   - name: "Cursor"
@@ -130,6 +135,10 @@ cli_tools:
       - "prometheus"
       - "grafana"
       - "loki"    # Log aggregation
+
+# Syncthing Configuration
+syncthing_device_id: "{{ ansible_hostname }}-{{ ansible_date_time.epoch }}"
+syncthing_api_key: "{{ app_secrets.syncthing.api_key }}"
 
 # Zsh Configuration
 oh_my_zsh_custom: "{{ '~/.oh-my-zsh' | expanduser }}"

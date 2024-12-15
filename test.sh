@@ -94,10 +94,43 @@ run_platform_tests() {
     echo -e "${YELLOW}Testing $platform environment...${NC}"
     
     # Create a temporary directory for this platform's test
-    test_dir=$(mktemp -d)
+    test_dir=$(mktemp -d 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        test_dir=$(mktemp -d -t 'vagrant-test')
+    fi
+    
+    if [ ! -d "$test_dir" ]; then
+        echo -e "${RED}Failed to create temporary directory${NC}"
+        return 1
+    }
+    
     script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    cp "$script_dir/Vagrantfile" "$test_dir/"
-    cp -r "$script_dir/ansible-role-personal" "$test_dir/"
+    
+    # Ensure source files exist before copying
+    if [ ! -f "$script_dir/Vagrantfile" ]; then
+        echo -e "${RED}Vagrantfile not found in $script_dir${NC}"
+        rm -rf "$test_dir"
+        return 1
+    fi
+    
+    if [ ! -d "$script_dir/ansible-role-personal" ]; then
+        echo -e "${RED}ansible-role-personal directory not found in $script_dir${NC}"
+        rm -rf "$test_dir"
+        return 1
+    fi
+    
+    # Copy files with error checking
+    if ! cp "$script_dir/Vagrantfile" "$test_dir/"; then
+        echo -e "${RED}Failed to copy Vagrantfile${NC}"
+        rm -rf "$test_dir"
+        return 1
+    fi
+    
+    if ! cp -r "$script_dir/ansible-role-personal" "$test_dir/"; then
+        echo -e "${RED}Failed to copy ansible-role-personal directory${NC}"
+        rm -rf "$test_dir"
+        return 1
+    fi
     
     (cd "$test_dir" && {
         # Bring up the VM

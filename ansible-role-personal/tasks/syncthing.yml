@@ -48,6 +48,16 @@
     - "~/.secrets"
   tags: ['syncthing']
 
+- name: Update secrets file with Syncthing API key
+  blockinfile:
+    path: "{{ secrets_file }}"
+    marker: "# {mark} SYNCTHING CONFIGURATION"
+    block: |
+      app_secrets:
+        syncthing:
+          api_key: "{{ app_secrets.syncthing.api_key }}"
+  when: app_secrets.syncthing is not defined or app_secrets.syncthing.api_key is not defined
+
 - name: Configure Syncthing
   template:
     src: syncthing_config.xml.j2
