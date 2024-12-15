@@ -2,9 +2,10 @@
 - name: Install Syncthing
   block:
     - name: Install Syncthing (MacOS)
-      community.general.homebrew:
+      community.general.homebrew_cask:
         name: syncthing
         state: present
+        install_options: 'force'  # Ensures we get the latest cask version
       when: is_macos
       
     - name: Install Syncthing (Ubuntu/Debian)

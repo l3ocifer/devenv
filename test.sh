@@ -6,6 +6,38 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Trap for cleanup
+cleanup() {
+    local exit_code=$?
+    echo -e "\n${YELLOW}Cleaning up...${NC}"
+    
+    # Clean up any remaining test directories
+    if [ -n "$results_dir" ] && [ -d "$results_dir" ]; then
+        rm -rf "$results_dir"
+    fi
+    
+    # Clean up platform-specific test directories
+    for platform in ubuntu wsl macos; do
+        if [ -n "$test_dir" ] && [ -d "$test_dir" ]; then
+            rm -rf "$test_dir"
+        fi
+    done
+    
+    # Destroy VMs if cleanup flag is set
+    if [ "$CLEANUP" = "true" ]; then
+        for platform in ubuntu wsl macos; do
+            if vagrant status $platform 2>/dev/null | grep -q "$platform"; then
+                echo -e "${YELLOW}Destroying $platform VM...${NC}"
+                vagrant destroy -f $platform &>/dev/null
+            fi
+        done
+    fi
+    
+    exit $exit_code
+}
+
+trap cleanup EXIT INT TERM
+
 # Function to install prerequisites
 install_prerequisites() {
     echo -e "${YELLOW}Checking and installing prerequisites...${NC}"
@@ -63,8 +95,9 @@ run_platform_tests() {
     
     # Create a temporary directory for this platform's test
     test_dir=$(mktemp -d)
-    cp Vagrantfile "$test_dir/"
-    cp -r ansible-role-personal "$test_dir/"
+    script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    cp "$script_dir/Vagrantfile" "$test_dir/"
+    cp -r "$script_dir/ansible-role-personal" "$test_dir/"
     
     (cd "$test_dir" && {
         # Bring up the VM
@@ -148,9 +181,8 @@ main() {
         fi
     done
 
-    # Clean up results directory
+    # Return to original directory
     cd - > /dev/null
-    rm -rf "$results_dir"
 
     # Final status and instructions
     if [ $failed -eq 0 ]; then

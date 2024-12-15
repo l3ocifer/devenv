@@ -9,7 +9,7 @@
     state: present
   loop:
     # Dock settings
-    - { domain: "com.apple.dock", key: "autohide", type: "bool", value: true }
+    - { domain: "com.apple.dock", key: "autohide", type: "bool", value: false }
     - { domain: "com.apple.dock", key: "minimize-to-application", type: "bool", value: true }
     - { domain: "com.apple.dock", key: "show-recents", type: "bool", value: false }
     
