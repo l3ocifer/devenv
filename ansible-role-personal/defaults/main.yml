@@ -137,7 +137,8 @@ cli_tools:
       - "loki"    # Log aggregation
 
 # Syncthing Configuration
-syncthing_device_id: "{{ ansible_hostname }}-{{ ansible_date_time.epoch }}"
+syncthing_device_id: "{{ ansible_hostname }}_{{ ansible_date_time.epoch }}"
+syncthing_secrets_folder_id: "secrets"
 syncthing_api_key: "{{ app_secrets.syncthing.api_key }}"
 
 # Zsh Configuration

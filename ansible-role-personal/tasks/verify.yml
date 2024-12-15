@@ -47,14 +47,13 @@
   failed_when: false
 
 - name: Verify Syncthing configuration
-  stat:
-    path: "~/.config/syncthing/config.xml"
+  command: grep -q "folder id=" ~/.config/syncthing/config.xml
   register: syncthing_config
-  failed_when: not syncthing_config.stat.exists
+  changed_when: false
+  failed_when: syncthing_config.rc != 0
 
 - name: Verify secrets file is being synced
-  shell: |
-    grep -q "{{ secrets_file | expanduser | basename }}" ~/.config/syncthing/config.xml
+  command: grep -q "folder id=\"{{ syncthing_secrets_folder_id }}\"" ~/.config/syncthing/config.xml
   register: secrets_sync_check
   changed_when: false
   failed_when: secrets_sync_check.rc != 0
@@ -125,7 +124,7 @@
       - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
       - Git Repos: {{ git_check.results | map(attribute='rc') | list | all == 0 }}
       - Tools: {{ tool_check.results | map(attribute='rc') | list | all == 0 }}
-      - Syncthing: {{ syncthing_check.rc == 0 }}
+      - Syncthing: {{ syncthing_config.rc == 0 }}
       - Secrets Sync: {{ secrets_sync_check.rc == 0 }}
       - SSH Agent: {{ ssh_agent_check.rc != 2 }}
       - Git SSH: {{ git_ssh_check.rc != 255 }}

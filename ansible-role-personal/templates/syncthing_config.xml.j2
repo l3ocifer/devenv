@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <configuration version="30">
-    <folder id="secrets" label="Secrets" path="~/.secrets" type="sendreceive" rescanIntervalS="3600" fsWatcherEnabled="true" fsWatcherDelayS="10" ignorePerms="false" autoNormalize="true">
+    <folder id="{{ syncthing_secrets_folder_id }}" label="Secrets" path="~/.secrets" type="sendreceive" rescanIntervalS="3600" fsWatcherEnabled="true" fsWatcherDelayS="10" ignorePerms="false" autoNormalize="true">
         <filesystemType>basic</filesystemType>
         <device id="{{ syncthing_device_id }}" introducedBy=""></device>
         <minDiskFree unit="%">1</minDiskFree>

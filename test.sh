@@ -105,15 +105,10 @@ run_platform_tests() {
     fi
     
     script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    role_dir="$script_dir/ansible-role-personal"
     
-    # Ensure source files exist before copying
-    if [ ! -f "$script_dir/Vagrantfile" ]; then
-        echo -e "${RED}Vagrantfile not found in $script_dir${NC}"
-        rm -rf "$test_dir"
-        return 1
-    fi
-    
-    if [ ! -d "$script_dir/ansible-role-personal" ]; then
+    # Ensure ansible role directory exists
+    if [ ! -d "$role_dir" ]; then
         echo -e "${RED}ansible-role-personal directory not found in $script_dir${NC}"
         rm -rf "$test_dir"
         return 1
@@ -121,6 +116,33 @@ run_platform_tests() {
     
     # Copy files with error checking
     echo -e "${GREEN}Copying files to $test_dir...${NC}"
+    
+    # Create tests directory structure
+    mkdir -p "$test_dir/ansible-role-personal/tests"
+    
+    # Copy role files
+    if ! cp -r "$role_dir"/* "$test_dir/ansible-role-personal/"; then
+        echo -e "${RED}Failed to copy ansible-role-personal directory${NC}"
+        rm -rf "$test_dir"
+        return 1
+    fi
+    
+    # Create test playbook if it doesn't exist
+    cat > "$test_dir/ansible-role-personal/tests/test.yml" << EOL
+---
+- hosts: all
+  become: true
+  roles:
+    - ansible-role-personal
+EOL
+    
+    # Create requirements file if it doesn't exist
+    cat > "$test_dir/ansible-role-personal/tests/requirements.yml" << EOL
+---
+roles: []
+collections:
+  - community.general
+EOL
     
     # Create Vagrantfile for specific platform
     if [ "$platform" = "ubuntu" ]; then
@@ -135,6 +157,8 @@ run_platform_tests() {
         return 1
     fi
 
+    # Create Vagrantfile
+    echo -e "${GREEN}Creating Vagrantfile for $platform...${NC}"
     cat > "$test_dir/Vagrantfile" << EOL
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
@@ -157,13 +181,7 @@ Vagrant.configure("2") do |config|
   end
 end
 EOL
-    
-    if ! cp -r "$script_dir/ansible-role-personal" "$test_dir/"; then
-        echo -e "${RED}Failed to copy ansible-role-personal directory${NC}"
-        rm -rf "$test_dir"
-        return 1
-    fi
-    
+
     (cd "$test_dir" && {
         # Bring up the VM
         vagrant up $platform &> "vagrant-$platform.log"
