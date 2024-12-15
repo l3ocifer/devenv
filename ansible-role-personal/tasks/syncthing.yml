@@ -137,3 +137,17 @@
 #   delay: 5
 #   until: syncthing_check.rc == 0
 #   tags: ['syncthing']
+
+- name: Ensure Syncthing config directory exists
+  ansible.builtin.file:
+    path: "~/.config/syncthing"
+    state: directory
+    mode: '0755'
+  tags: ['sync']
+
+- name: Create Syncthing config
+  ansible.builtin.template:
+    src: "syncthing-config.xml.j2"
+    dest: "~/.config/syncthing/config.xml"
+    mode: '0644'
+  tags: ['sync']

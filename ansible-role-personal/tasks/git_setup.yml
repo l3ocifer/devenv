@@ -63,3 +63,23 @@
   loop_control:
     label: "{{ item.name }}"
   tags: ['git']
+
+- name: Ensure git config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "~/.config/git"
+    - "~/.config/git/includes"
+  tags: ['git']
+
+- name: Create git config files
+  ansible.builtin.template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    mode: '0644'
+  loop:
+    - { template: "gitconfig-personal.j2", dest: "~/.config/git/includes/gitconfig-personal" }
+    - { template: "gitconfig-provisions.j2", dest: "~/.config/git/includes/gitconfig-provisions" }
+  tags: ['git']

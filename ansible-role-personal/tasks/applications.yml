@@ -428,3 +428,12 @@
   changed_when: ollama_pull.rc == 0
   when: is_macos and model_check.rc != 0
   tags: ['ai']
+
+# Fix Vagrant timeout in Starship
+- name: Configure Starship timeout
+  ansible.builtin.lineinfile:
+    path: "~/.config/starship.toml"
+    line: 'command_timeout = 5000'
+    create: yes
+    mode: '0644'
+  tags: ['apps']
