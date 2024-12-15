@@ -3,24 +3,37 @@
 - name: Update Homebrew
   community.general.homebrew:
     update_homebrew: yes
+    quiet: true
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
   when: is_macos
   tags: ['apps']
 
 # Mac App Store Applications
-- name: Check if Mac App Store apps are installed
-  shell: "mas list | awk '{print $1}' | grep -x '{{ item.id }}' || true"
-  register: mas_check
-  changed_when: false
+- name: Check if Mac App Store apps exist in Applications
+  stat:
+    path: "/Applications/{{ item.name }}.app"
+  register: mas_app_check
   with_items: "{{ macos_apps | selectattr('id', 'defined') | list }}"
   when: is_macos
   tags: ['apps']
 
+- name: Check Mac App Store registration
+  shell: "mas list | awk '{print $1}' | grep -x '{{ item.item.id }}' || true"
+  register: mas_reg_check
+  changed_when: false
+  with_items: "{{ mas_app_check.results }}"
+  when: is_macos and not item.stat.exists
+  tags: ['apps']
+
 - name: Install Mac App Store applications
   community.general.mas:
-    id: "{{ item.item.id }}"
+    id: "{{ item.item.item.id }}"
     state: present
-  with_items: "{{ mas_check.results }}"
-  when: is_macos and item.stdout == '' and not ansible_check_mode
+  with_items: "{{ mas_reg_check.results | default([]) }}"
+  when: is_macos and not ansible_check_mode and item is defined and item.stdout == ''
   failed_when: false
   ignore_errors: yes
   tags: ['apps']
@@ -69,6 +82,11 @@
     name: "{{ item.item.brew }}"
     state: present
     greedy: true
+    quiet: true
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
   with_items: "{{ app_check.results }}"
   when: is_macos and not item.stat.exists and not ansible_check_mode
   failed_when: false
@@ -140,6 +158,11 @@
   community.general.homebrew:
     name: "{{ item.item }}"
     state: present
+    quiet: true
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
   with_items: "{{ cli_check.results }}"
   when: is_macos and item.rc != 0 and not ansible_check_mode
   tags: ['cli']
@@ -299,3 +322,24 @@
       shell: curl -fsSL https://bun.sh/install | bash
   when: not is_macos
   tags: ['shell']
+
+# Configure AI tools
+- name: Pull llama3.2 3B model for ollama
+  shell: "ollama pull llama3.2:3b -q"
+  register: ollama_pull
+  changed_when: ollama_pull.rc == 0
+  failed_when: false
+  when: is_macos
+  tags: ['apps']
+
+- name: Configure aichat to use ollama's llama3.2
+  copy:
+    dest: "~/.config/aichat/config.yaml"
+    content: |
+      # aichat configuration
+      model: llama3.2
+      provider: ollama
+      api_base: http://localhost:11434/api
+    mode: '0600'
+  when: is_macos
+  tags: ['apps']

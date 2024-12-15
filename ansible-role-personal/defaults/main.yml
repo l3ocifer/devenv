@@ -93,3 +93,5 @@ shell_tools:
   - eza  # Modern ls replacement (fork of exa)
   - tmux
   - direnv
+  - aichat
+  - ollama
