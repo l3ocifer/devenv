@@ -68,6 +68,12 @@ backup_sudoers() {
 setup_sudo() {
     local current_user=$(whoami)
     
+    # Check if user already has passwordless sudo
+    if sudo -n true 2>/dev/null; then
+        success "Passwordless sudo is already configured for $current_user"
+        return 0
+    fi
+    
     # Display security warning
     warn "SECURITY NOTICE: This script will configure passwordless sudo access for your user."
     warn "This means you won't need to enter your password for sudo commands."
@@ -87,32 +93,29 @@ setup_sudo() {
     backup_sudoers
     
     if [[ "$OS" == "macos" ]]; then
-        # Check if user already has sudo privileges without password
-        if ! sudo -n true 2>/dev/null; then
-            log "Setting up passwordless sudo for $current_user on macOS..."
-            echo "$current_user ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/$current_user
-            sudo chmod 0440 /etc/sudoers.d/$current_user
-            
-            # Verify the syntax
-            if ! sudo visudo -cf /etc/sudoers.d/$current_user >/dev/null 2>&1; then
-                error "Invalid sudoers entry. Reverting changes..."
-                sudo rm -f /etc/sudoers.d/$current_user
-            fi
+        log "Setting up passwordless sudo for $current_user on macOS..."
+        echo "$current_user ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/$current_user
+        sudo chmod 0440 /etc/sudoers.d/$current_user
+        
+        # Verify the syntax
+        if ! sudo visudo -cf /etc/sudoers.d/$current_user >/dev/null 2>&1; then
+            error "Invalid sudoers entry. Reverting changes..."
+            sudo rm -f /etc/sudoers.d/$current_user
         fi
     else
         # For Linux/WSL
-        if ! sudo -n true 2>/dev/null; then
-            log "Setting up passwordless sudo for $current_user on Linux..."
-            echo "$current_user ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/$current_user
-            sudo chmod 0440 /etc/sudoers.d/$current_user
-            
-            # Verify the syntax
-            if ! sudo visudo -cf /etc/sudoers.d/$current_user >/dev/null 2>&1; then
-                error "Invalid sudoers entry. Reverting changes..."
-                sudo rm -f /etc/sudoers.d/$current_user
-            fi
+        log "Setting up passwordless sudo for $current_user on Linux..."
+        echo "$current_user ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/$current_user
+        sudo chmod 0440 /etc/sudoers.d/$current_user
+        
+        # Verify the syntax
+        if ! sudo visudo -cf /etc/sudoers.d/$current_user >/dev/null 2>&1; then
+            error "Invalid sudoers entry. Reverting changes..."
+            sudo rm -f /etc/sudoers.d/$current_user
         fi
     fi
+    
+    success "Passwordless sudo configured successfully for $current_user"
 }
 
 # Setup secrets file
