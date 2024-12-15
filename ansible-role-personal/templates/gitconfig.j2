@@ -1,0 +1,33 @@
+[user]
+    name = {{ git_user_name }}
+    email = {{ git_user_email }}
+
+[http]
+    postBuffer = 524288000
+
+[credential]
+    helper = cache --timeout=604800
+
+[core]
+    autocrlf = input
+    longpaths = true
+    compression = 9
+    packedGitLimit = 512m
+    packedGitWindowSize = 512m
+
+[pull]
+    rebase = true
+
+[url "git@github.com:"]
+    insteadOf = https://github.com/
+
+[pack]
+    deltaCacheSize = 2047m
+    packSizeLimit = 2047m
+    windowMemory = 2047m
+
+# Client-specific configurations
+{% for client in git_client_configs | default([]) %}
+[includeIf "hasconfig:remote.*.url:*{{ client.domain }}:{{ client.org }}/*"]
+    path = ~/.gitconfig-{{ client.name }}
+{% endfor %}

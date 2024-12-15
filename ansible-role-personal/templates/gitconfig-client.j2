@@ -1,0 +1,15 @@
+[user]
+    name = {{ git_user_name }}
+    email = {{ item.email | default(git_user_email) }}
+{% if item.signingkey is defined %}
+    signingkey = {{ item.signingkey }}
+{% endif %}
+
+{% if item.commit_gpgsign is defined %}
+[commit]
+    gpgsign = {{ item.commit_gpgsign | lower }}
+{% endif %}
+
+{% if item.custom_config is defined %}
+{{ item.custom_config }}
+{% endif %}

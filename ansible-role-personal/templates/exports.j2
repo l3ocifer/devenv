@@ -1,0 +1,37 @@
+# Path configurations
+export PATH=$HOME/bin:/usr/local/bin:$PATH
+
+# Language and locale settings
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
+# Editor configuration
+export EDITOR='vim'
+export VISUAL='vim'
+
+# History configuration
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+export HISTTIMEFORMAT="%d/%m/%y %T "
+
+# Development tool configurations
+{% if is_macos %}
+# Homebrew configurations
+export HOMEBREW_NO_ANALYTICS=1
+
+# Python configurations
+if [ -f "/Users/{{ ansible_user_id }}/miniconda3/etc/profile.d/conda.sh" ]; then
+    . "/Users/{{ ansible_user_id }}/miniconda3/etc/profile.d/conda.sh"
+else
+    export PATH="/Users/{{ ansible_user_id }}/miniconda3/bin:$PATH"
+fi
+{% endif %}
+
+# Node Version Manager
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Custom environment variables from secrets
+{% for key, value in (secrets_env | default({})).items() %}
+export {{ key }}="{{ value }}"
+{% endfor %}

@@ -1,0 +1,62 @@
+---
+# General UI/UX
+- name: Configure General UI/UX settings
+  community.general.osx_defaults:
+    domain: NSGlobalDomain
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { key: "NSNavPanelExpandedStateForSaveMode", type: "bool", value: true }
+    - { key: "PMPrintingExpandedStateForPrint", type: "bool", value: true }
+    - { key: "NSDocumentSaveNewDocumentsToCloud", type: "bool", value: false }
+  when: is_macos
+  tags: ['macos']
+
+# Finder
+- name: Configure Finder settings
+  community.general.osx_defaults:
+    domain: com.apple.finder
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { key: "ShowExternalHardDrivesOnDesktop", type: "bool", value: true }
+    - { key: "ShowHardDrivesOnDesktop", type: "bool", value: true }
+    - { key: "NewWindowTargetPath", type: "string", value: "file://${HOME}/Desktop/" }
+  when: is_macos
+  tags: ['macos']
+
+# Printing
+- name: Configure printing settings
+  community.general.osx_defaults:
+    domain: com.apple.print.PrintingPrefs
+    key: "Quit When Finished"
+    type: bool
+    value: true
+  when: is_macos
+  tags: ['macos']
+
+# Mail
+- name: Configure Mail.app settings
+  community.general.osx_defaults:
+    domain: com.apple.mail
+    key: AddressesIncludeNameOnPasteboard
+    type: bool
+    value: false
+  when: is_macos
+  tags: ['macos']
+
+# System
+- name: Configure system settings
+  community.general.osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { domain: "com.apple.systempreferences", key: "TMShowUnsupportedNetworkVolumes", type: "bool", value: true }
+    - { domain: "/Library/Preferences/SystemConfiguration/com.apple.smb.server", key: "NetBIOSName", type: "string", value: "{{ ansible_hostname }}" }
+  become: true
+  when: is_macos
+  tags: ['macos']

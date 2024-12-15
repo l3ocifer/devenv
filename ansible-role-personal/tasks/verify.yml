@@ -1,0 +1,60 @@
+---
+# Verify directory structure
+- name: Verify directories
+  stat:
+    path: "{{ item }}"
+  register: dir_check
+  failed_when: not dir_check.stat.exists
+  with_items:
+    - "{{ git_base_dir }}"
+    - "{{ devenv_dir }}"
+    - "{{ scripts_dir }}"
+    - "~/.config/personal"
+    - "~/.config/zsh"
+    - "{{ ssh_config_dir }}"
+
+# Verify git repositories
+- name: Verify git repositories
+  command: git status
+  args:
+    chdir: "{{ item }}"
+  register: git_check
+  changed_when: false
+  failed_when: git_check.rc != 0
+  with_items:
+    - "{{ devenv_dir }}"
+    - "{{ scripts_dir }}"
+
+# Verify essential tools
+- name: Verify essential tools
+  command: "{{ item }}"
+  register: tool_check
+  changed_when: false
+  failed_when: tool_check.rc != 0
+  with_items:
+    - git --version
+    - python3 --version
+    - curl --version
+    - zsh --version
+
+# Platform-specific verification
+- name: Verify macOS specific tools
+  command: "{{ item }}"
+  register: macos_check
+  changed_when: false
+  failed_when: macos_check.rc != 0
+  with_items:
+    - brew --version
+    - docker --version
+    - colima version
+  when: is_macos
+
+- name: Verify Linux specific tools
+  command: "{{ item }}"
+  register: linux_check
+  changed_when: false
+  failed_when: linux_check.rc != 0
+  with_items:
+    - docker --version
+    - python3 -m pip --version
+  when: is_linux or is_wsl

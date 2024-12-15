@@ -1,0 +1,21 @@
+---
+- name: Ensure AWS config directory exists
+  file:
+    path: "~/.aws"
+    state: directory
+    mode: '0700'
+  tags: ['aws']
+
+- name: Create AWS config file
+  template:
+    src: aws_config.j2
+    dest: ~/.aws/config
+    mode: '0600'
+  tags: ['aws']
+
+- name: Create AWS credentials file
+  template:
+    src: aws_credentials.j2
+    dest: ~/.aws/credentials
+    mode: '0600'
+  tags: ['aws']

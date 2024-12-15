@@ -1,0 +1,85 @@
+---
+- name: Ensure dotfiles directory exists
+  file:
+    path: "~/dotfiles"
+    state: directory
+    mode: '0755'
+  tags: ['dotfiles']
+
+- name: Initialize dotfiles git repository if not exists
+  command: git init
+  args:
+    chdir: "~/dotfiles"
+    creates: "~/dotfiles/.git"
+  tags: ['dotfiles']
+
+- name: Configure dotfiles remote
+  command: git remote add origin {{ dotfiles_repo }}
+  args:
+    chdir: "~/dotfiles"
+  register: add_remote
+  failed_when: add_remote.rc != 0 and "remote origin already exists" not in add_remote.stderr
+  tags: ['dotfiles']
+
+- name: Copy dotfiles
+  copy:
+    src: "{{ item.src }}"
+    dest: "~/dotfiles/{{ item.dest }}"
+    mode: "{{ item.mode | default('0644') }}"
+  with_items:
+    - { src: "templates/inputrc.j2", dest: ".inputrc" }
+    - { src: "templates/zshrc.j2", dest: ".zshrc" }
+    - { src: "templates/gitconfig.j2", dest: ".gitconfig" }
+    - { src: "templates/gitconfig-provisions.j2", dest: ".gitconfig-provisions" }
+  tags: ['dotfiles']
+
+- name: Create git hooks directory
+  file:
+    path: "~/dotfiles/.git/hooks"
+    state: directory
+    mode: '0755'
+  tags: ['dotfiles']
+
+- name: Install post-commit hook
+  template:
+    src: post-commit.j2
+    dest: "~/dotfiles/.git/hooks/post-commit"
+    mode: '0755'
+  tags: ['dotfiles']
+
+- name: Create symlinks
+  file:
+    src: "~/dotfiles/{{ item }}"
+    dest: "~/{{ item }}"
+    state: link
+    force: yes
+  with_items:
+    - .inputrc
+    - .zshrc
+    - .gitconfig
+    - .gitconfig-provisions
+  tags: ['dotfiles']
+
+- name: Configure git for dotfiles
+  blockinfile:
+    path: "~/dotfiles/.git/config"
+    block: |
+      [core]
+        autocrlf = input
+        filemode = true
+      [push]
+        default = current
+      [pull]
+        rebase = true
+    create: yes
+  tags: ['dotfiles']
+
+- name: Create initial commit if repository is empty
+  shell: |
+    if [ -z "$(git log -1 2>/dev/null)" ]; then
+      git add .
+      git commit -m "Initial dotfiles setup"
+    fi
+  args:
+    chdir: "~/dotfiles"
+  tags: ['dotfiles']

@@ -1,0 +1,31 @@
+---
+- name: Ensure SSH directory exists with correct permissions
+  file:
+    path: "{{ ssh_config_dir }}"
+    state: directory
+    mode: '0700'
+  tags: ['ssh']
+
+- name: Copy SSH configuration
+  template:
+    src: ssh_config.j2
+    dest: "{{ ssh_config_dir }}/config"
+    mode: '0600'
+  tags: ['ssh']
+
+- name: Copy SSH keys from secrets
+  copy:
+    content: "{{ item.key }}"
+    dest: "{{ ssh_config_dir }}/{{ item.name }}"
+    mode: "{{ item.mode | default('0600') }}"
+  with_items: "{{ ssh_keys | default([]) }}"
+  no_log: true
+  tags: ['ssh']
+
+- name: Add SSH keys to agent
+  shell: |
+    eval $(ssh-agent -s)
+    ssh-add {{ ssh_config_dir }}/{{ item.name }}
+  with_items: "{{ ssh_keys | default([]) }}"
+  when: item.name.endswith('_rsa') or item.name.endswith('_ed25519')
+  tags: ['ssh']

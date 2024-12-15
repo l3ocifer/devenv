@@ -1,0 +1,66 @@
+---
+# Directory setup
+- name: Ensure Git directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "{{ git_base_dir }}"
+    - "{{ devenv_dir }}"
+    - "~/.config/git"
+    - "~/.config/git/includes"
+  tags: ['git']
+
+# Git configuration
+- name: Configure git globally
+  git_config:
+    name: "{{ item.name }}"
+    scope: global
+    value: "{{ item.value }}"
+  loop:
+    - { name: 'user.name', value: '{{ git_user_name }}' }
+    - { name: 'user.email', value: '{{ git_user_email }}' }
+    - { name: 'http.postBuffer', value: '524288000' }
+    - { name: 'credential.helper', value: 'cache --timeout=604800' }
+    - { name: 'core.autocrlf', value: 'input' }
+    - { name: 'core.longpaths', value: 'true' }
+    - { name: 'pull.rebase', value: 'true' }
+    - { name: 'url."git@github.com:".insteadOf', value: 'https://github.com/' }
+  tags: ['git']
+
+# Client-specific git configurations
+- name: Create client-specific git configs
+  template:
+    src: "gitconfig-{{ item.name }}.j2"
+    dest: "~/.gitconfig-{{ item.name }}"
+    mode: '0644'
+  loop: "{{ git_clients | default([]) }}"
+  when: git_clients is defined
+  tags: ['git']
+
+# Create provisions git config
+- name: Create provisions git config
+  template:
+    src: templates/gitconfig-provisions.j2
+    dest: ~/.gitconfig-provisions
+    mode: '0644'
+  when: create_provisions_config | default(false)
+  tags: ['git']
+
+# Repository setup
+- name: Clone or update devenv repository
+  git:
+    repo: "{{ devenv_repo }}"
+    dest: "{{ devenv_dir }}"
+    version: main
+    update: yes
+  tags: ['git']
+
+- name: Clone or update scripts repository
+  git:
+    repo: "{{ scripts_repo }}"
+    dest: "{{ scripts_dir }}"
+    version: main
+    update: yes
+  tags: ['git']

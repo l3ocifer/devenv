@@ -1,0 +1,249 @@
+---
+# Ensure Homebrew is up to date
+- name: Update Homebrew
+  community.general.homebrew:
+    update_homebrew: yes
+  when: is_macos
+  tags: ['apps']
+
+# Mac App Store Applications
+- name: Install Mac App Store applications
+  community.general.mas:
+    id: "{{ item.id }}"
+    state: present
+  with_items: "{{ macos_apps | selectattr('id', 'defined') | list }}"
+  when: is_macos
+  tags: ['apps']
+
+# Ensure required directories exist
+- name: Create application config directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "~/.config/personal/cursor"
+    - "~/.config/personal/zed"
+    - "~/.config/personal/pulsar"
+    - "~/.config/personal/logseq"
+    - "~/.config/cursor"
+    - "~/.config/zed"
+    - "~/.config/pulsar"
+    - "~/.logseq"
+  tags: ['apps']
+
+# Copy application templates
+- name: Copy application templates
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: '0644'
+  with_items:
+    - { src: "cursor/settings.json.j2", dest: "~/.config/personal/cursor/settings.json" }
+    - { src: "zed/settings.json.j2", dest: "~/.config/personal/zed/settings.json" }
+    - { src: "pulsar/config.cson.j2", dest: "~/.config/personal/pulsar/config.cson" }
+    - { src: "logseq/config.edn.j2", dest: "~/.config/personal/logseq/config.edn" }
+  tags: ['apps']
+
+# Homebrew Cask Applications
+- name: Install desktop applications via Homebrew
+  community.general.homebrew_cask:
+    name: "{{ item.brew }}"
+    state: present
+    greedy: true
+  with_items: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
+  when: is_macos
+  tags: ['apps']
+
+# Direct Download Applications
+- name: Display manual installation instructions for direct download applications
+  debug:
+    msg: "Please manually install {{ item.name }} from {{ item.url }}"
+  with_items: "{{ macos_apps | selectattr('url', 'defined') | list }}"
+  when: is_macos
+  tags: ['apps']
+
+# Ensure application configurations are properly linked
+- name: Setup application symlinks
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: yes
+  with_items:
+    - { src: "~/.config/personal/cursor/settings.json", dest: "~/.config/cursor/settings.json" }
+    - { src: "~/.config/personal/zed/settings.json", dest: "~/.config/zed/settings.json" }
+    - { src: "~/.config/personal/pulsar/config.cson", dest: "~/.config/pulsar/config.cson" }
+    - { src: "~/.config/personal/logseq/config.edn", dest: "~/.logseq/config.edn" }
+  tags: ['apps']
+
+# Ensure proper permissions for Docker socket
+- name: Ensure Docker socket permissions
+  file:
+    path: /var/run/docker.sock
+    mode: '0666'
+  become: true
+  when: is_macos
+  ignore_errors: yes
+  tags: ['apps']
+
+# Configure Colima (Docker alternative)
+- name: Configure Colima
+  shell: |
+    colima stop || true
+    colima start --cpu 4 --memory 8 --disk 100
+  when: is_macos
+  changed_when: false
+  tags: ['apps']
+
+# Post-installation checks
+- name: Verify installations
+  shell: "{{ item }}"
+  register: check_result
+  changed_when: false
+  failed_when: false
+  with_items:
+    - "docker --version"
+    - "colima status"
+    - "podman --version"
+    - "zed --version"
+    - "cursor --version"
+    - "vlc --version"
+  when: is_macos
+  tags: ['apps']
+
+- name: Display installation results
+  debug:
+    var: check_result
+  when: is_macos
+  tags: ['apps']
+
+# Additional CLI tools from script and .zshrc
+- name: Install CLI tools via Homebrew
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - thefuck
+    - starship
+    - zoxide
+    - atuin
+    - bun
+    - aichat
+    - ollama
+    - jan
+    - m-cli
+    - terraform
+    - kubectl
+    - kubectx
+    - k9s
+    - helm
+    - aws-cli
+    - azure-cli
+    - google-cloud-sdk
+    - jq
+    - yq
+    - ripgrep
+    - fd
+    - bat
+    - exa
+    - tmux
+    - direnv
+    - vim
+    - git
+  when: is_macos
+  tags: ['cli']
+
+# Linux Applications
+- name: Install Linux applications
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - podman
+    - chromium-browser
+    - obs-studio
+    - vim
+    - git
+    - terraform
+    - kubectl
+    - helm
+    - jq
+    - yq
+    - ripgrep
+    - fd-find
+    - bat
+    - exa
+    - tmux
+    - direnv
+  when: is_linux
+  become: true
+  tags: ['apps']
+
+# Docker installation for Linux
+- name: Install Docker on Linux
+  block:
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
+        
+    - name: Install Docker packages
+      apt:
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+  when: is_linux and not is_wsl
+  become: true
+  tags: ['docker']
+
+# WSL specific setup
+- name: Configure WSL specific tools
+  block:
+    - name: Install WSL tools
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - wslu  # WSL utilities
+  when: is_wsl
+  become: true
+  tags: ['wsl']
+
+# Python tools
+- name: Install Python tools
+  pip:
+    name: "{{ item }}"
+    state: present
+    extra_args: --user
+  with_items:
+    - thefuck
+    - aichat
+    - sherlock
+  when: not is_macos
+  tags: ['python']
+
+# Shell tools for non-MacOS
+- name: Install shell tools on Linux
+  block:
+    - name: Install Starship
+      shell: curl -sS https://starship.rs/install.sh | sh -s -- -y
+      
+    - name: Install Zoxide
+      shell: curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+      
+    - name: Install Atuin
+      shell: bash <(curl https://raw.githubusercontent.com/atuinsh/atuin/main/install.sh)
+      
+    - name: Install Bun
+      shell: curl -fsSL https://bun.sh/install | bash
+  when: not is_macos
+  tags: ['shell']

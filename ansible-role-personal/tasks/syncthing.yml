@@ -1,0 +1,85 @@
+---
+- name: Install Syncthing
+  block:
+    - name: Install Syncthing (MacOS)
+      community.general.homebrew:
+        name: syncthing
+        state: present
+      when: is_macos
+      
+    - name: Install Syncthing (Ubuntu/Debian)
+      apt:
+        name: syncthing
+        state: present
+      when: is_linux and not is_wsl
+      become: true
+      
+    - name: Add Syncthing repository key (WSL)
+      apt_key:
+        url: https://syncthing.net/release-key.txt
+        state: present
+      when: is_wsl
+      become: true
+      
+    - name: Add Syncthing repository (WSL)
+      apt_repository:
+        repo: deb https://apt.syncthing.net/ syncthing stable
+        state: present
+      when: is_wsl
+      become: true
+      
+    - name: Install Syncthing (WSL)
+      apt:
+        name: syncthing
+        state: present
+        update_cache: yes
+      when: is_wsl
+      become: true
+  tags: ['syncthing']
+
+- name: Create Syncthing directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0700'
+  with_items:
+    - "~/.config/syncthing"
+    - "~/.secrets"
+  tags: ['syncthing']
+
+- name: Configure Syncthing
+  template:
+    src: syncthing_config.xml.j2
+    dest: ~/.config/syncthing/config.xml
+    mode: '0600'
+  tags: ['syncthing']
+
+- name: Start Syncthing service
+  block:
+    - name: Start Syncthing service (MacOS)
+      command: brew services start syncthing
+      when: is_macos
+      
+    - name: Enable and start Syncthing service (Linux)
+      systemd:
+        name: syncthing@{{ ansible_user_id }}
+        enabled: yes
+        state: started
+      when: is_linux and not is_wsl
+      become: true
+      
+    - name: Create Syncthing service file (WSL)
+      template:
+        src: syncthing.service.j2
+        dest: ~/.config/systemd/user/syncthing.service
+        mode: '0644'
+      when: is_wsl
+      
+    - name: Start Syncthing service (WSL)
+      systemd:
+        name: syncthing
+        enabled: yes
+        state: started
+        scope: user
+      when: is_wsl
+  tags: ['syncthing']

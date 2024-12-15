@@ -1,0 +1,168 @@
+---
+# Security Tools
+- name: Install security tools
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gpg  # For encryption
+    - pass  # Password manager
+    - age  # Modern encryption tool
+    - vault  # HashiCorp Vault client
+  become: "{{ not is_macos }}"
+  when: not is_macos
+  tags: ['security']
+
+- name: Install security tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gnupg
+    - pass
+    - age
+    - vault
+  when: is_macos
+  tags: ['security']
+
+# Infrastructure Tools
+- name: Install infrastructure tools
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - terraform
+    - kubectl
+    - helm
+    - k9s  # Kubernetes CLI tool
+    - kubectx  # Kubernetes context switcher
+  become: "{{ not is_macos }}"
+  when: not is_macos
+  tags: ['infra']
+
+- name: Install infrastructure tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - terraform
+    - kubectl
+    - helm
+    - k9s
+    - kubectx
+  when: is_macos
+  tags: ['infra']
+
+# Development Tools
+- name: Install development tools
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - git
+    - jq  # JSON processor
+    - yq  # YAML processor
+    - fzf  # Fuzzy finder
+    - ripgrep  # Fast grep
+    - fd-find  # Fast find
+    - bat  # Better cat
+    - exa  # Better ls
+    - tmux  # Terminal multiplexer
+    - direnv  # Directory-based environments
+  become: "{{ not is_macos }}"
+  when: not is_macos
+  tags: ['dev']
+
+- name: Install development tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - git
+    - jq
+    - yq
+    - fzf
+    - ripgrep
+    - fd
+    - bat
+    - exa
+    - tmux
+    - direnv
+  when: is_macos
+  tags: ['dev']
+
+# Monitoring Tools
+- name: Install monitoring tools
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - htop  # Process viewer
+    - glances  # System monitor
+    - ctop  # Container metrics
+    - duf  # Disk usage
+  become: "{{ not is_macos }}"
+  when: not is_macos
+  tags: ['monitoring']
+
+- name: Install monitoring tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - htop
+    - glances
+    - ctop
+    - duf
+  when: is_macos
+  tags: ['monitoring']
+
+# Cloud CLI Tools
+- name: Install cloud CLI tools
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - awscli
+    - azure-cli
+    - google-cloud-sdk
+  become: "{{ not is_macos }}"
+  when: not is_macos
+  tags: ['cloud']
+
+- name: Install cloud CLI tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - awscli
+    - azure-cli
+    - google-cloud-sdk
+  when: is_macos
+  tags: ['cloud']
+
+# Network Tools
+- name: Install network tools
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - mtr  # Network diagnostic
+    - nmap  # Network scanner
+    - iperf3  # Network performance
+    - wireshark  # Packet analyzer
+  become: "{{ not is_macos }}"
+  when: not is_macos
+  tags: ['network']
+
+- name: Install network tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - mtr
+    - nmap
+    - iperf3
+    - wireshark
+  when: is_macos
+  tags: ['network']

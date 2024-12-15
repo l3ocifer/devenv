@@ -1,0 +1,29 @@
+# Git aliases
+alias g="git"
+alias gs="git status"
+alias gc="git commit"
+alias gp="git push"
+alias gl="git pull"
+
+# AWS aliases
+alias leo="export AWS_PROFILE=aws-l3o-iam-leo \
+           export AWS_REGION=us-east-1"
+
+# Navigation aliases
+alias ..="cd .."
+alias ...="cd ../.."
+alias ll="ls -la"
+
+# Development aliases
+alias tf="terraform"
+alias k="kubectl"
+alias d="docker"
+
+# Custom application aliases
+{% if is_macos %}
+alias subl="open -a 'Sublime Text'"
+alias vsc="open -a 'Visual Studio Code'"
+{% endif %}
+
+# Add your custom aliases below
+{{ custom_aliases | default('') }}

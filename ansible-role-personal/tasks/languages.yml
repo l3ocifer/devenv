@@ -1,0 +1,180 @@
+---
+# Rust Installation and Update
+- name: Check Rust installation
+  command: rustc --version
+  register: rust_check
+  ignore_errors: true
+  changed_when: false
+  tags: ['languages']
+
+- name: Install/Update Rust via rustup
+  shell: |
+    if ! command -v rustup &> /dev/null; then
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    else
+      rustup update
+    fi
+  when: rust_check.rc != 0 or 'update available' in rust_check.stderr
+  tags: ['languages']
+
+# Python Setup
+- name: Check miniconda installation
+  stat:
+    path: "{{ ansible_env.HOME }}/miniconda3/bin/conda"
+  register: conda_check
+  tags: ['languages']
+
+- name: Download miniconda installer
+  get_url:
+    url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-{{ 'MacOSX' if is_macos else 'Linux' }}-{{ 'arm64' if ansible_architecture == 'arm64' else 'x86_64' }}.sh"
+    dest: "/tmp/miniconda.sh"
+    mode: '0755'
+  when: not conda_check.stat.exists
+  tags: ['languages']
+
+- name: Install miniconda
+  shell: /tmp/miniconda.sh -b -p {{ ansible_env.HOME }}/miniconda3
+  when: not conda_check.stat.exists
+  tags: ['languages']
+
+- name: Update conda
+  shell: "{{ ansible_env.HOME }}/miniconda3/bin/conda update -n base -c defaults conda -y"
+  when: conda_check.stat.exists
+  tags: ['languages']
+
+# Ruby Setup
+- name: Install/Update rbenv
+  community.general.homebrew:
+    name: rbenv
+    state: latest
+  when: is_macos
+  tags: ['languages']
+
+- name: Install Ruby build dependencies (Linux)
+  apt:
+    name:
+      - autoconf
+      - bison
+      - build-essential
+      - libssl-dev
+      - libyaml-dev
+      - libreadline6-dev
+      - zlib1g-dev
+      - libncurses5-dev
+      - libffi-dev
+      - libgdbm6
+      - libgdbm-dev
+    state: present
+  when: is_linux
+  become: true
+  tags: ['languages']
+
+# Java Setup
+- name: Install Java Development Kit
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - openjdk-17-jdk
+    - maven
+  when: is_linux
+  become: true
+  tags: ['languages']
+
+- name: Install Java (macOS)
+  community.general.homebrew_cask:
+    name: 
+      - temurin  # Eclipse Temurin JDK
+      - intellij-idea-ce  # Community Edition
+    state: present
+  when: is_macos
+  tags: ['languages']
+
+# Go Setup
+- name: Install Go (macOS)
+  community.general.homebrew:
+    name: go
+    state: latest
+  when: is_macos
+  tags: ['languages']
+
+- name: Install Go (Linux)
+  apt:
+    name: golang
+    state: latest
+  when: is_linux
+  become: true
+  tags: ['languages']
+
+# Xcode and iOS Development (macOS only)
+- name: Check Xcode installation
+  stat:
+    path: "/Applications/Xcode.app"
+  register: xcode_check
+  when: is_macos
+  tags: ['languages']
+
+- name: Install Xcode Command Line Tools
+  command: xcode-select --install
+  register: xcode_cli_result
+  failed_when: 
+    - xcode_cli_result.rc != 0 
+    - "'already installed' not in xcode_cli_result.stderr"
+  changed_when: xcode_cli_result.rc == 0
+  when: is_macos
+  tags: ['languages']
+
+- name: Accept Xcode license
+  command: xcodebuild -license accept
+  become: true
+  when: 
+    - is_macos 
+    - xcode_check.stat.exists
+  tags: ['languages']
+
+# Node.js Setup
+- name: Install Node Version Manager
+  shell: |
+    if ! command -v nvm &> /dev/null; then
+      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
+    fi
+  args:
+    creates: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+  tags: ['languages']
+
+- name: Install latest LTS Node.js
+  shell: |
+    export NVM_DIR="{{ ansible_env.HOME }}/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm install --lts
+    nvm use --lts
+  tags: ['languages']
+
+# Common development tools
+- name: Install development tools (macOS)
+  community.general.homebrew:
+    name:
+      - cmake
+      - ninja
+      - llvm
+      - gcc
+      - gdb
+      - valgrind
+    state: present
+  when: is_macos
+  tags: ['languages']
+
+- name: Install development tools (Linux)
+  apt:
+    name:
+      - build-essential
+      - cmake
+      - ninja-build
+      - llvm
+      - clang
+      - gdb
+      - valgrind
+    state: present
+  when: is_linux
+  become: true
+  tags: ['languages']
