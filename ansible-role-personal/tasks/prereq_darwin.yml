@@ -13,10 +13,11 @@
 - name: Install essential tools
   community.general.homebrew:
     name: "{{ item }}"
-    state: present
+    state: latest
+    upgrade_all: no
   with_items:
     - git
     - curl
     - wget
-    - python3
+    - python@3.13
     - ansible
