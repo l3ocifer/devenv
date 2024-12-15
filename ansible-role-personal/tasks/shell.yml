@@ -45,21 +45,21 @@
         - name: Check Oh My Zsh directory
           stat:
             path: "{{ oh_my_zsh_dir }}/.git"
-          failed_when: not stat_result.stat.exists
-          register: stat_result
+          register: omz_check
+          failed_when: not omz_check.stat.exists
 
         - name: Check plugins installation
           stat:
             path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}/.git"
           loop: "{{ zsh_plugins }}"
-          failed_when: not item.stat.exists
-          register: plugin_result
+          register: plugin_checks
+          failed_when: not ansible_loop_var.stat.exists
 
         - name: Check theme installation
           stat:
             path: "{{ oh_my_zsh_custom }}/themes/powerlevel10k/.git"
-          failed_when: not stat_result.stat.exists
-          register: theme_result
+          register: theme_check
+          failed_when: not theme_check.stat.exists
       rescue:
         - name: Handle verification failure
           debug:
