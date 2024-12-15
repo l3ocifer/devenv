@@ -57,12 +57,9 @@
 
 # Display verification results
 - name: Display verification summary
-  debug:
+  ansible.builtin.debug:
     msg: |
       Verification Results:
-      - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
-      - Files: {{ file_check.results | map(attribute='stat.exists') | list | all }}
-      - Syncthing: {{ syncthing_check.rc == 0 }}
-      - SSH Agent: {{ ssh_agent_check.rc == 0 }}
-      - Git Config: {{ git_config_check.rc == 0 }}
-      - Oh My Zsh: {{ omz_check.stat.exists }}
+      - Directories: {{ (dir_check.results | map(attribute='stat.exists') | list) is all }}
+      - Files: {{ (file_check.results | map(attribute='stat.exists') | list) is all }}
+      - Git Config Files Present: {{ file_check.results | selectattr('item', 'match', '.*gitconfig.*') | map(attribute='stat.exists') | list is all }}

@@ -47,8 +47,18 @@ function install_dependencies() {
 }
 
 function run_tests() {
-    echo "Running Ansible playbook..."
-    ansible-playbook tests/test.yml -i tests/inventory --connection=local
+    echo "Running Molecule tests..."
+    if ! command -v molecule &> /dev/null; then
+        pip install molecule molecule-docker ansible-lint yamllint docker
+    fi
+
+    echo "Starting Colima if not running..."
+    if ! colima status &> /dev/null; then
+        colima start
+    fi
+
+    export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
+    molecule test
 }
 
 # Main execution
