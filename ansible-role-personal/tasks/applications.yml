@@ -325,9 +325,9 @@
     extra_args: --user
   with_items:
     - thefuck
-    - aichat
+    - aichat  # AI chat client for CLI
     - sherlock
-  when: not is_macos
+  when: not is_macos  # On macOS, these are installed via Homebrew
   tags: ['python']
 
 # Shell tools for non-MacOS
@@ -347,26 +347,62 @@
   when: not is_macos
   tags: ['shell']
 
-# Configure AI tools
-- name: Pull llama3.2 3B model for ollama
-  shell: "ollama pull llama3.2:3b -q"
+# Security Tools
+- name: Install security tools (Linux)
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gpg  # For encryption
+    - pass  # Password manager
+    - age  # Modern encryption tool
+  become: true
+  when: not is_macos
+  loop_control:
+    label: "{{ item }}"
+  tags: ['security']
+
+- name: Install security tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gnupg
+    - pass
+    - age
+  when: is_macos
+  loop_control:
+    label: "{{ item }}"
+  tags: ['security']
+
+# AI Tools Configuration
+- name: Ensure Ollama service is running
+  shell: "pgrep ollama || (nohup ollama serve > /dev/null 2>&1 & sleep 2)"
+  register: ollama_service
+  changed_when: ollama_service.rc == 0
+  when: is_macos
+  tags: ['ai']
+
+- name: Ensure aichat config directory exists
+  ansible.builtin.file:
+    path: "~/.config/aichat"
+    state: directory
+    mode: '0755'
+  tags: ['ai']
+
+- name: Configure aichat
+  ansible.builtin.template:
+    src: "aichat.yaml.j2"
+    dest: "~/.config/aichat/config.yaml"
+    mode: '0644'
+  tags: ['ai']
+
+- name: Pull {{ ai_model_name }} model for ollama
+  shell: "ollama pull {{ ai_model_name }} -q"
   register: ollama_pull
   changed_when: ollama_pull.rc == 0
-  failed_when: false
   when: is_macos
-  tags: ['apps']
-
-- name: Configure aichat to use ollama's llama3.2
-  copy:
-    dest: "~/.config/aichat/config.yaml"
-    content: |
-      # aichat configuration
-      model: llama3.2
-      provider: ollama
-      api_base: http://localhost:11434/api
-    mode: '0600'
-  when: is_macos
-  tags: ['apps']
+  tags: ['ai']
 
 # Zsh plugins
 - name: Check if Zsh plugins exist

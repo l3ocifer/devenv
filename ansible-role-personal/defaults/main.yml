@@ -93,7 +93,6 @@ shell_tools:
   - eza  # Modern ls replacement (fork of exa)
   - tmux
   - direnv
-  - aichat
   - ollama
 
 # CLI Tools
@@ -131,6 +130,10 @@ cli_tools:
       - "prometheus"
       - "grafana"
       - "loki"    # Log aggregation
+
+# AI Configuration
+ai_model_name: llama3.2:3b
+ai_theme: dark
 
 # Programming Languages
 languages:

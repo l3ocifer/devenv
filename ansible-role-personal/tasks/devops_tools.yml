@@ -24,32 +24,3 @@
   loop_control:
     label: "{{ item.item.name }}"
   tags: ['devops']
-
-# Security Tools for Linux
-- name: Install security tools (Linux)
-  package:
-    name: "{{ item }}"
-    state: present
-  with_items:
-    - gpg  # For encryption
-    - pass  # Password manager
-    - age  # Modern encryption tool
-  become: true
-  when: not is_macos
-  loop_control:
-    label: "{{ item }}"
-  tags: ['security']
-
-# Security Tools for MacOS
-- name: Install security tools (MacOS)
-  community.general.homebrew:
-    name: "{{ item }}"
-    state: present
-  with_items:
-    - gnupg
-    - pass
-    - age
-  when: is_macos
-  loop_control:
-    label: "{{ item }}"
-  tags: ['security']
