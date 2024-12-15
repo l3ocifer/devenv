@@ -75,9 +75,17 @@
 
 - name: Start Syncthing service
   block:
+    - name: Create Syncthing LaunchAgent (MacOS)
+      template:
+        src: syncthing.plist.j2
+        dest: ~/Library/LaunchAgents/syncthing.plist
+        mode: '0644'
+      when: ansible_os_family == "Darwin"
+      
     - name: Start Syncthing service (MacOS)
-      command: brew services start syncthing
-      when: is_macos
+      command: "launchctl load -w ~/Library/LaunchAgents/syncthing.plist"
+      when: ansible_os_family == "Darwin"
+      ignore_errors: yes
       
     - name: Enable and start Syncthing service (Linux)
       systemd:

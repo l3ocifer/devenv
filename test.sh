@@ -120,11 +120,43 @@ run_platform_tests() {
     fi
     
     # Copy files with error checking
-    if ! cp "$script_dir/Vagrantfile" "$test_dir/"; then
-        echo -e "${RED}Failed to copy Vagrantfile${NC}"
+    echo -e "${GREEN}Copying files to $test_dir...${NC}"
+    
+    # Create Vagrantfile for specific platform
+    if [ "$platform" = "ubuntu" ]; then
+        box="generic/ubuntu2204"
+    elif [ "$platform" = "macos" ]; then
+        box="tas50/macos_14"
+    elif [ "$platform" = "wsl" ]; then
+        box="generic/debian12"
+    else
+        echo -e "${RED}Unsupported platform: $platform${NC}"
         rm -rf "$test_dir"
         return 1
     fi
+
+    cat > "$test_dir/Vagrantfile" << EOL
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "$box"
+  
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "2048"
+    vb.cpus = 2
+  end
+
+  config.vm.synced_folder ".", "/vagrant", type: "virtualbox"
+  
+  config.vm.provision "ansible_local" do |ansible|
+    ansible.playbook = "ansible-role-personal/tests/test.yml"
+    ansible.galaxy_role_file = "ansible-role-personal/tests/requirements.yml"
+    ansible.galaxy_roles_path = "/etc/ansible/roles"
+    ansible.become = true
+  end
+end
+EOL
     
     if ! cp -r "$script_dir/ansible-role-personal" "$test_dir/"; then
         echo -e "${RED}Failed to copy ansible-role-personal directory${NC}"
