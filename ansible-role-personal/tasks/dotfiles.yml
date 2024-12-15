@@ -3,6 +3,7 @@
   stat:
     path: "{{ '~/dotfiles' | expanduser }}"
   register: dotfiles_stat
+  no_log: true
   tags: ['dotfiles']
 
 - name: Ensure dotfiles directory exists
@@ -17,6 +18,7 @@
   stat:
     path: "{{ '~/dotfiles/.git' | expanduser }}"
   register: dotfiles_git_stat
+  no_log: true
   tags: ['dotfiles']
 
 - name: Initialize dotfiles git repository if not exists
@@ -44,6 +46,9 @@
     - { src: "templates/zshrc.j2", dest: ".zshrc" }
     - { src: "templates/gitconfig.j2", dest: ".gitconfig" }
     - { src: "templates/gitconfig-provisions.j2", dest: ".gitconfig-provisions" }
+  no_log: true
+  loop_control:
+    label: "{{ item.dest }}"
   tags: ['dotfiles']
 
 - name: Copy dotfiles

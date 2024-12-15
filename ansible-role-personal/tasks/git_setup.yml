@@ -10,6 +10,8 @@
     - "{{ devenv_dir }}"
     - "~/.config/git"
     - "~/.config/git/includes"
+  loop_control:
+    label: "{{ item | basename }}"
   tags: ['git']
 
 # Git configuration
@@ -26,6 +28,8 @@
     - { name: 'core.autocrlf', value: 'input' }
     - { name: 'core.longpaths', value: 'true' }
     - { name: 'pull.rebase', value: 'true' }
+  loop_control:
+    label: "{{ item.name }}"
   tags: ['git']
 
 # Configure Git SSH command

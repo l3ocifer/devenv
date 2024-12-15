@@ -23,6 +23,7 @@
     path: "/Applications/{{ item.name }}.app"
   loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list }}"
   register: mas_app_check
+  no_log: true
   tags: ['mas']
 
 - name: Install Mac App Store applications
@@ -50,6 +51,9 @@
     path: "/Applications/{{ item.name }}.app"
   loop: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
   register: app_check
+  no_log: true
+  loop_control:
+    label: "{{ item.name }}"
   tags: ['apps']
 
 - name: Install desktop applications via Homebrew
@@ -161,37 +165,10 @@
   register: cli_check
   changed_when: false
   failed_when: false
-  with_items:
-    - thefuck
-    - starship
-    - zoxide
-    - atuin
-    - bun
-    - aichat
-    - ollama
-    - jan
-    - m-cli
-    - terraform
-    - kubectl
-    - kubectx
-    - k9s
-    - helm
-    - aws-cli
-    - azure-cli
-    - google-cloud-sdk
-    - jq
-    - yq
-    - ripgrep
-    - fd
-    - bat
-    - eza
-    - tmux
-    - direnv
-    - vim
-    - git
-    - colima
-    - podman
-  when: is_macos
+  no_log: true
+  loop: "{{ cli_tools }}"
+  loop_control:
+    label: "{{ item }}"
   tags: ['cli']
 
 - name: Install CLI tools via Homebrew
@@ -389,7 +366,9 @@
     path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
   with_items: "{{ zsh_plugins }}"
   register: zsh_plugins_check
-  no_log: "{{ not ansible_verbosity | bool }}"
+  no_log: true
+  loop_control:
+    label: "{{ item.name }}"
   tags: ['zsh']
 
 - name: Install Zsh plugins
