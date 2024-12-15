@@ -168,48 +168,40 @@ main() {
     # Install prerequisites
     install_prerequisites
 
-    # Create a temporary directory for test results
-    results_dir=$(mktemp -d)
-    cd "$results_dir"
-
-    # Run tests in parallel
-    echo -e "${YELLOW}Starting parallel tests for all platforms...${NC}"
+    echo -e "${YELLOW}Starting tests for all platforms...${NC}"
+    
+    # Run tests for each platform sequentially
+    local failed_platforms=()
     
     for platform in ubuntu wsl macos; do
-        run_platform_tests $platform &
-        pids[$platform]=$!
-    done
-
-    # Wait for all tests to complete
-    failed=0
-    for platform in "${!pids[@]}"; do
-        if wait ${pids[$platform]}; then
-            echo -e "${GREEN}✓ $platform tests completed successfully${NC}"
-        else
-            echo -e "${RED}✗ $platform tests failed${NC}"
-            failed=1
+        echo -e "${YELLOW}Testing $platform environment...${NC}"
+        if ! run_platform_tests "$platform"; then
+            failed_platforms+=("$platform")
+            if [ "$CLEANUP" = "true" ]; then
+                echo -e "${YELLOW}Cleaning up $platform environment...${NC}"
+                (cd "$test_dir" && vagrant destroy -f)
+            fi
         fi
     done
-
-    # Return to original directory
-    cd - > /dev/null
-
-    # Final status and instructions
-    if [ $failed -eq 0 ]; then
-        echo -e "${GREEN}All platform tests completed successfully!${NC}"
-        echo -e "${GREEN}All test environments have been cleaned up.${NC}"
-    else
-        echo -e "${RED}Some platform tests failed. Check the logs for details.${NC}"
-        if [ "$CLEANUP" = "true" ]; then
-            echo -e "${YELLOW}All environments have been cleaned up due to -c flag${NC}"
-        else
-            echo -e "${YELLOW}Failed environments have been left intact for debugging.${NC}"
-            echo "To clean up all environments, run: $0 -c"
+    
+    # Report results
+    local failed_count=${#failed_platforms[@]}
+    if [ $failed_count -gt 0 ]; then
+        echo -e "${RED}✗ $failed_count tests failed: ${failed_platforms[*]}${NC}"
+        echo "Check the logs for details."
+        if [ "$CLEANUP" != "true" ]; then
+            echo "Failed environments have been left intact for debugging."
+            echo "To clean up all environments, run: ./test.sh -c"
             echo "To clean up a specific environment, run: vagrant destroy -f <platform>"
         fi
+        exit 1
+    else
+        echo -e "${GREEN}✓ All tests passed${NC}"
+        if [ "$CLEANUP" = "true" ]; then
+            cleanup_vms
+        fi
+        exit 0
     fi
-
-    exit $failed
 }
 
 # Run main function

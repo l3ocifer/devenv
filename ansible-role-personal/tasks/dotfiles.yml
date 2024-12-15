@@ -89,13 +89,14 @@
   loop: "{{ existing_dotfiles.results }}"
   tags: ['dotfiles']
 
-- name: Create symlinks for config files
+- name: Create configuration symlinks
   file:
-    src: "{{ '~/dotfiles' | expanduser }}/{{ item.item.dest }}"
-    dest: "{{ '~/' | expanduser }}{{ item.item.dest }}"
+    src: "{{ item.src | expanduser }}"
+    dest: "{{ item.dest | expanduser }}"
     state: link
-    force: true
-  loop: "{{ existing_dotfiles.results }}"
+    force: yes
+  with_items: "{{ config_files }}"
+  when: item.required
   tags: ['dotfiles']
 
 - name: Check git hooks directory

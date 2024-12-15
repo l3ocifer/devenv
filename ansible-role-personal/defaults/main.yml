@@ -11,6 +11,26 @@ scripts_dir: "~/.scripts"
 devenv_dir: "{{ git_base_dir }}/devenv"
 secrets_file: "~/.config/personal/secrets.yml"
 
+# Configuration files with their source and destination paths
+config_files:
+  # Core configs
+  - { src: "{{ devenv_dir }}/dotfiles/inputrc", dest: "~/.inputrc", required: true }
+  - { src: "{{ devenv_dir }}/dotfiles/zshrc", dest: "~/.zshrc", required: true }
+  - { src: "{{ devenv_dir }}/dotfiles/gitconfig", dest: "~/.gitconfig", required: true }
+  - { src: "{{ devenv_dir }}/dotfiles/gitconfig-provisions", dest: "~/.gitconfig-provisions", required: true }
+  # Shell configs
+  - { src: "{{ devenv_dir }}/dotfiles/zsh/aliases", dest: "~/.config/zsh/aliases", required: true }
+  - { src: "{{ devenv_dir }}/dotfiles/zsh/exports", dest: "~/.config/zsh/exports", required: true }
+  # Git configs
+  - { src: "{{ devenv_dir }}/dotfiles/git/config", dest: "~/.config/git/config", required: true }
+  # SSH configs
+  - { src: "{{ devenv_dir }}/dotfiles/ssh/config", dest: "~/.ssh/config", required: true }
+  # Application configs
+  - { src: "{{ devenv_dir }}/dotfiles/cursor/settings.json", dest: "~/.config/cursor/settings.json", required: false }
+  - { src: "{{ devenv_dir }}/dotfiles/zed/settings.json", dest: "~/.config/zed/settings.json", required: false }
+  - { src: "{{ devenv_dir }}/dotfiles/pulsar/config.cson", dest: "~/.config/pulsar/config.cson", required: false }
+  - { src: "{{ devenv_dir }}/dotfiles/logseq/config.edn", dest: "~/.config/logseq/config.edn", required: false }
+
 # Repository configurations
 repositories:
   devenv:

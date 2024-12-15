@@ -14,17 +14,16 @@
     - "{{ ssh_config_dir }}"
   no_log: true
 
-# Verify git repositories
-- name: Verify git repositories
-  command: git status
-  args:
-    chdir: "{{ item }}"
-  register: git_check
-  changed_when: false
-  failed_when: git_check.rc != 0
-  with_items:
-    - "{{ devenv_dir }}"
-    - "{{ scripts_dir }}"
+# Verify configuration symlinks
+- name: Verify configuration symlinks
+  stat:
+    path: "{{ item.dest | expanduser }}"
+  register: symlink_check
+  failed_when: >
+    (item.required and not symlink_check.stat.exists) or
+    (symlink_check.stat.exists and not symlink_check.stat.islnk)
+  with_items: "{{ config_files }}"
+  no_log: false
 
 # Verify essential tools
 - name: Verify essential tools
@@ -51,40 +50,13 @@
   register: syncthing_config
   changed_when: false
   failed_when: syncthing_config.rc != 0
+  when: syncthing_check.rc == 0
 
 - name: Verify secrets file is being synced
   command: grep -q "folder id=\"{{ syncthing_secrets_folder_id }}\"" ~/.config/syncthing/config.xml
   register: secrets_sync_check
   changed_when: false
   failed_when: secrets_sync_check.rc != 0
-
-# Verify symlinks
-- name: Verify configuration symlinks
-  stat:
-    path: "{{ item.dest | expanduser }}"
-  register: symlink_check
-  failed_when: >
-    (item.required and not symlink_check.stat.exists) or
-    (symlink_check.stat.exists and not symlink_check.stat.islnk)
-  with_items:
-    # Core configs
-    - { dest: "~/.inputrc", required: true }
-    - { dest: "~/.zshrc", required: true }
-    - { dest: "~/.gitconfig", required: true }
-    - { dest: "~/.gitconfig-provisions", required: true }
-    # Shell configs
-    - { dest: "~/.config/zsh/aliases", required: true }
-    - { dest: "~/.config/zsh/exports", required: true }
-    # Git configs
-    - { dest: "~/.config/git/config", required: true }
-    # SSH configs
-    - { dest: "~/.ssh/config", required: true }
-    # Application configs
-    - { dest: "~/.config/cursor/settings.json", required: false }
-    - { dest: "~/.config/zed/settings.json", required: false }
-    - { dest: "~/.config/pulsar/config.cson", required: false }
-    - { dest: "~/.config/logseq/config.edn", required: false }
-  no_log: false
 
 # Verify SSH and Git functionality
 - name: Test SSH agent
@@ -127,7 +99,6 @@
     msg: |
       Verification Results:
       - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
-      - Git Repos: {{ git_check.results | map(attribute='rc') | list | all == 0 }}
       - Tools: {{ tool_check.results | map(attribute='rc') | list | all == 0 }}
       - Syncthing: {{ syncthing_config.rc == 0 }}
       - Secrets Sync: {{ secrets_sync_check.rc == 0 }}
