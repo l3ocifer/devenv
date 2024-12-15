@@ -45,6 +45,50 @@
   when: item is defined and item.item is defined
   tags: ['mas']
 
+# Homebrew Applications
+- name: Check desktop applications
+  ansible.builtin.stat:
+    path: "/Applications/{{ item.name }}.app"
+  loop: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
+  register: app_check
+  tags: ['apps']
+
+- name: Install desktop applications via Homebrew
+  community.general.homebrew_cask:
+    name: "{{ item.item.brew }}"
+    state: present
+  loop: "{{ app_check.results }}"
+  when: not item.stat.exists
+  register: brew_install
+  tags: ['apps']
+
+- name: Display Homebrew installation status
+  ansible.builtin.debug:
+    verbosity: 1
+    msg: "{{ item.item.item.name }} {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ brew_install.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  tags: ['apps']
+
+# Direct Download Applications
+- name: Check direct download applications
+  ansible.builtin.stat:
+    path: "/Applications/{{ item.name }}.app"
+  loop: "{{ macos_apps | selectattr('url', 'defined') | list }}"
+  register: direct_check
+  tags: ['apps']
+
+- name: Display direct download application status
+  ansible.builtin.debug:
+    verbosity: 1
+    msg: "{{ item.item.name }} {{ 'needs manual download from' if not item.stat.exists else 'exists' }}: {{ item.item.url }}"
+  loop: "{{ direct_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: not item.stat.exists
+  tags: ['apps']
+
 # Config Directories and Files
 - name: Ensure parent config directory exists
   ansible.builtin.file:
@@ -86,38 +130,6 @@
     force: true
   loop: "{{ config_symlinks }}"
   tags: ['config']
-
-# Homebrew Cask Applications
-- name: Check if Homebrew cask apps are installed
-  stat:
-    path: "/Applications/{{ item.name }}.app"
-  register: app_check
-  with_items: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
-  when: is_macos
-  tags: ['apps']
-
-- name: Install desktop applications via Homebrew
-  community.general.homebrew_cask:
-    name: "{{ item.item.brew }}"
-    state: present
-    greedy: true
-  environment:
-    HOMEBREW_NO_AUTO_UPDATE: 1
-    HOMEBREW_NO_INSTALL_CLEANUP: 1
-    HOMEBREW_NO_ENV_HINTS: 1
-  with_items: "{{ app_check.results }}"
-  when: is_macos and not item.stat.exists and not ansible_check_mode
-  failed_when: false
-  ignore_errors: yes
-  tags: ['apps']
-
-# Direct Download Applications
-- name: Display manual installation instructions for direct download applications
-  debug:
-    msg: "Please manually install {{ item.name }} from {{ item.url }}"
-  with_items: "{{ macos_apps | selectattr('url', 'defined') | list }}"
-  when: is_macos
-  tags: ['apps']
 
 # CLI Tools Installation
 - name: Check if CLI tools are installed
@@ -346,38 +358,6 @@
     mode: '0600'
   when: is_macos
   tags: ['apps']
-
-# SSH Keys
-- name: Check if SSH keys exist
-  ansible.builtin.stat:
-    path: "~/.ssh/{{ item.name }}"
-  loop: "{{ ssh_keys }}"
-  register: ssh_keys_check
-  tags: ['ssh']
-  no_log: true
-
-- name: Add private SSH keys
-  ansible.builtin.copy:
-    content: "{{ item.key }}"
-    dest: "~/.ssh/{{ item.name }}"
-    mode: "{{ item.mode }}"
-    force: false
-    owner: "{{ ansible_user_id }}"
-    group: "{{ ansible_user_gid }}"
-  loop: "{{ ssh_keys }}"
-  register: ssh_keys_result
-  no_log: true
-  tags: ['ssh']
-
-- name: Display SSH key status
-  ansible.builtin.debug:
-    verbosity: 1
-    msg: "SSH key {{ item.item.name }} {{ 'added' if item.changed else 'exists' }}"
-  loop: "{{ ssh_keys_result.results }}"
-  loop_control:
-    label: "{{ item.item.name }}"
-  no_log: false
-  tags: ['ssh']
 
 # Zsh plugins
 - name: Check if Zsh plugins exist

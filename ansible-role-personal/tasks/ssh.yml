@@ -15,13 +15,35 @@
   when: ansible_os_family == 'Darwin'
   tags: ['ssh']
 
-- name: Copy SSH keys from secrets
-  copy:
-    content: "{{ item.key }}"
-    dest: "{{ ssh_config_dir }}/{{ item.name }}"
-    mode: "{{ item.mode | default('0600') }}"
-  with_items: "{{ ssh_keys | default([]) }}"
+- name: Check existing SSH keys
+  ansible.builtin.stat:
+    path: "~/.ssh/{{ item.name }}"
+  loop: "{{ ssh_keys }}"
+  register: ssh_key_check
   no_log: true
+  tags: ['ssh']
+
+- name: Add SSH keys if missing
+  ansible.builtin.copy:
+    content: "{{ item.item.key }}"
+    dest: "~/.ssh/{{ item.item.name }}"
+    mode: "{{ item.item.mode }}"
+    force: false
+    backup: false
+  loop: "{{ ssh_key_check.results }}"
+  when: not item.stat.exists
+  register: ssh_key_add
+  no_log: true
+  changed_when: not item.stat.exists
+  tags: ['ssh']
+
+- name: Display SSH key status
+  ansible.builtin.debug:
+    verbosity: 1
+    msg: "SSH key {{ item.item.name }} {{ 'added' if not item.stat.exists else 'exists' }}"
+  loop: "{{ ssh_key_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
   tags: ['ssh']
 
 - name: Start SSH agent
