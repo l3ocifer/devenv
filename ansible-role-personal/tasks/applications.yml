@@ -25,6 +25,7 @@
   changed_when: false
   check_mode: no
   ignore_errors: yes
+  when: is_macos
   tags: ['mas']
 
 - name: Check if Mac App Store apps exist
@@ -32,6 +33,7 @@
     path: "/Applications/{{ item.name }}.app"
   loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list }}"
   register: mas_app_check
+  when: is_macos
   tags: ['mas']
 
 - name: Install Mac App Store applications
@@ -48,34 +50,21 @@
       debug:
         msg: "Failed to install {{ item.item.0.name }}. Please ensure you're signed into the App Store."
       when: mas_installation.failed is defined
+  when: is_macos
   tags: ['mas']
 
-- name: Display Mac App Store status
-  ansible.builtin.debug:
-    msg: "MAS: {{ item.item.0.name }} - {{ 'installed' if item.changed else 'exists' }}"
-  loop: "{{ mas_installation.results }}"
-  loop_control:
-    label: "{{ item.item.0.name }}"
-  when: item is defined and item.item is defined
-  tags: ['mas']
-
-- name: Warn if Mac App Store is not accessible
-  debug:
-    msg: "Warning: Mac App Store is not accessible. Some applications may not be installed."
-  when: mas_list.rc != 0
-  tags: ['mas']
-
-# Homebrew Applications
-- name: Check desktop applications
+# Desktop Applications
+- name: Check desktop applications (macOS)
   ansible.builtin.stat:
     path: "/Applications/{{ item.name }}.app"
   loop: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
   register: app_check
   loop_control:
     label: "{{ item.name }}"
+  when: is_macos
   tags: ['apps']
 
-- name: Install desktop applications via Homebrew
+- name: Install desktop applications via Homebrew (macOS)
   community.general.homebrew_cask:
     name: "{{ item.item.brew }}"
     state: present
@@ -84,8 +73,58 @@
     HOMEBREW_NO_INSTALL_CLEANUP: 1
     HOMEBREW_NO_ENV_HINTS: 1
   loop: "{{ app_check.results }}"
-  when: not item.stat.exists
+  when: is_macos and not item.stat.exists
   register: brew_install
+  tags: ['apps']
+
+- name: Check desktop applications (Linux)
+  ansible.builtin.stat:
+    path: "/usr/bin/{{ item.name }}"
+  loop: "{{ linux_apps | selectattr('package', 'defined') | list }}"
+  register: app_check_linux
+  loop_control:
+    label: "{{ item.name }}"
+  when: is_linux
+  tags: ['apps']
+
+- name: Install desktop applications via apt (Linux)
+  package:
+    name: "{{ item.item.package }}"
+    state: present
+  loop: "{{ app_check_linux.results }}"
+  when: is_linux and not item.stat.exists
+  register: apt_install
+  tags: ['apps']
+
+# Linux Applications
+- name: Install Linux desktop applications
+  block:
+    - name: Add apt repositories
+      apt_repository:
+        repo: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop:
+        - ppa:cursor/cursor
+        - ppa:brave-browser/brave-browser
+      become: true
+      when: is_linux
+
+    - name: Install Linux desktop applications
+      package:
+        name:
+          - cursor
+          - brave-browser
+          - google-chrome-stable
+          - thunderbird
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - vagrant
+        state: present
+      become: true
+      when: is_linux
+  when: is_linux
   tags: ['apps']
 
 - name: Display Homebrew status
@@ -94,6 +133,16 @@
   loop: "{{ brew_install.results }}"
   loop_control:
     label: "{{ item.item.item.name }}"
+  when: is_macos
+  tags: ['apps']
+
+- name: Display apt status
+  ansible.builtin.debug:
+    msg: "App: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ apt_install.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: is_linux
   tags: ['apps']
 
 # CLI Development Tools
@@ -106,38 +155,41 @@
   check_mode: no
   tags: ['apps']
 
-- name: Install missing CLI development tools
+- name: Install CLI tools (Linux)
+  package:
+    name: "{{ item.item.name }}"
+    state: present
+  become: true
+  loop: "{{ cli_check.results }}"
+  when: item.rc != 0 and is_linux
+  register: cli_install_linux
+  tags: ['apps']
+
+- name: Install CLI tools (macOS)
   community.general.homebrew:
     name: "{{ item.item.name }}"
     state: present
   loop: "{{ cli_check.results }}"
-  when: item.rc != 0
-  register: cli_install
+  when: item.rc != 0 and is_macos
+  register: cli_install_macos
   tags: ['apps']
 
 - name: Display CLI tool status
   ansible.builtin.debug:
     msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
-  loop: "{{ cli_install.results }}"
+  loop: "{{ cli_install_linux.results }}"
   loop_control:
     label: "{{ item.item.item.name }}"
+  when: is_linux
   tags: ['apps']
 
-# Direct Download Applications
-- name: Check direct download applications
-  ansible.builtin.stat:
-    path: "/Applications/{{ item.name }}.app"
-  loop: "{{ macos_apps | selectattr('url', 'defined') | list }}"
-  register: direct_check
-  tags: ['apps']
-
-- name: Display direct download status
+- name: Display CLI tool status
   ansible.builtin.debug:
-    msg: "URL: {{ item.item.name }} - {{ 'manual download required' if not item.stat.exists else 'exists' }}"
-  loop: "{{ direct_check.results }}"
+    msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ cli_install_macos.results }}"
   loop_control:
-    label: "{{ item.item.name }}"
-  when: not item.stat.exists
+    label: "{{ item.item.item.name }}"
+  when: is_macos
   tags: ['apps']
 
 # Config Directories and Files
@@ -192,6 +244,7 @@
   loop: "{{ cli_tools }}"
   loop_control:
     label: "{{ item.name }}"
+  when: is_macos
   tags: ['cli']
 
 - name: Install CLI tools via Homebrew
@@ -207,40 +260,6 @@
   loop_control:
     label: "{{ item.item.name }}"
   tags: ['cli']
-
-# Linux Applications
-- name: Check if Linux applications are installed
-  shell: "dpkg -l | grep -w '^ii.*{{ item }}' || true"
-  register: linux_check
-  changed_when: false
-  with_items:
-    - podman
-    - chromium-browser
-    - obs-studio
-    - vim
-    - git
-    - terraform
-    - kubectl
-    - helm
-    - jq
-    - yq
-    - ripgrep
-    - fd-find
-    - bat
-    - eza
-    - tmux
-    - direnv
-  when: is_linux
-  tags: ['apps']
-
-- name: Install Linux applications
-  apt:
-    name: "{{ item.item }}"
-    state: present
-  with_items: "{{ linux_check.results }}"
-  when: is_linux and item.stdout == ''
-  become: true
-  tags: ['apps']
 
 # Docker installation for Linux
 - name: Check if Docker is installed
