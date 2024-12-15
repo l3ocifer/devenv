@@ -11,6 +11,8 @@
     - curl
     - wget
   when: is_linux
+  loop_control:
+    label: "{{ item }}"
   tags: ['languages']
 
 # Rust Installation and Update
@@ -19,6 +21,7 @@
     path: "{{ '~/.cargo/bin/rustc' | expanduser }}"
   register: rust_check
   tags: ['languages']
+  no_log: true
 
 - name: Install/Update Rust via rustup
   shell: |
@@ -38,6 +41,7 @@
     path: "{{ '~/miniconda3/bin/conda' | expanduser }}"
   register: conda_check
   tags: ['languages']
+  no_log: true
 
 - name: Install miniconda
   block:
@@ -73,6 +77,8 @@
       environment:
         PATH: "{{ '~/miniconda3/bin' | expanduser }}:{{ ansible_env.PATH }}"
       loop: "{{ languages.python.packages | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
       when: languages.python.packages is defined
   tags: ['languages']
 
@@ -82,6 +88,7 @@
     path: "{{ '~/.nvm/nvm.sh' | expanduser }}"
   register: nvm_check
   tags: ['languages']
+  no_log: true
 
 - name: Install nvm
   shell: |

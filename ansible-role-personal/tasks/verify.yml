@@ -12,6 +12,7 @@
     - "~/.config/personal"
     - "~/.config/zsh"
     - "{{ ssh_config_dir }}"
+  no_log: true
 
 # Verify git repositories
 - name: Verify git repositories
@@ -78,7 +79,8 @@
     - { dest: "~/.config/cursor/settings.json" }
     - { dest: "~/.config/zed/settings.json" }
     - { dest: "~/.config/pulsar/config.cson" }
-    - { dest: "~/.logseq/config.edn" }
+    - { dest: "~/.config/logseq/config.edn" }
+  no_log: true
 
 # Verify SSH and Git functionality
 - name: Test SSH agent

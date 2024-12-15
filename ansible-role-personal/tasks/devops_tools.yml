@@ -11,6 +11,8 @@
     - vault  # HashiCorp Vault client
   become: "{{ not is_macos }}"
   when: not is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['security']
 
 - name: Install security tools (MacOS)
@@ -23,6 +25,8 @@
     - age
     - vault
   when: is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['security']
 
 # Infrastructure Tools
@@ -38,6 +42,8 @@
     - kubectx  # Kubernetes context switcher
   become: "{{ not is_macos }}"
   when: not is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['infra']
 
 - name: Install infrastructure tools (MacOS)
@@ -51,6 +57,8 @@
     - k9s
     - kubectx
   when: is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['infra']
 
 # Development Tools
@@ -71,6 +79,8 @@
     - direnv  # Directory-based environments
   become: "{{ not is_macos }}"
   when: not is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['dev']
 
 - name: Install development tools (MacOS)
@@ -89,6 +99,8 @@
     - tmux
     - direnv
   when: is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['dev']
 
 # Monitoring Tools
@@ -103,6 +115,8 @@
     - duf  # Disk usage
   become: "{{ not is_macos }}"
   when: not is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['monitoring']
 
 - name: Install monitoring tools (MacOS)
@@ -115,6 +129,8 @@
     - ctop
     - duf
   when: is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['monitoring']
 
 # Cloud CLI Tools
@@ -128,6 +144,8 @@
     - google-cloud-sdk
   become: "{{ not is_macos }}"
   when: not is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['cloud']
 
 - name: Install cloud CLI tools (MacOS)
@@ -139,6 +157,8 @@
     - azure-cli
     - google-cloud-sdk
   when: is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['cloud']
 
 # Network Tools
@@ -153,6 +173,8 @@
     - wireshark  # Packet analyzer
   become: "{{ not is_macos }}"
   when: not is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['network']
 
 - name: Install network tools (MacOS)
@@ -165,4 +187,6 @@
     - iperf3
     - wireshark
   when: is_macos
+  loop_control:
+    label: "{{ item }}"
   tags: ['network']

@@ -65,6 +65,7 @@
     - { name: zsh-autosuggestions, repo: https://github.com/zsh-users/zsh-autosuggestions.git }
     - { name: zsh-syntax-highlighting, repo: https://github.com/zsh-users/zsh-syntax-highlighting.git }
   tags: ['shell']
+  no_log: true
 
 - name: Install Zsh plugins
   git:
@@ -73,4 +74,6 @@
     depth: 1
   when: not item.stat.exists
   loop: "{{ plugin_stat.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
   tags: ['shell']
