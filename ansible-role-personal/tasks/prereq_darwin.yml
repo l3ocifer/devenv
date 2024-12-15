@@ -15,7 +15,6 @@
     name: "{{ item }}"
     state: present
     upgrade_all: no
-    quiet: yes
   with_items:
     - git
     - curl
