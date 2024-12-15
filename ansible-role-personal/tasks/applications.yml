@@ -10,12 +10,21 @@
   when: is_macos
   tags: ['apps']
 
+# Install mas CLI
+- name: Install Mac App Store CLI
+  community.general.homebrew:
+    name: mas
+    state: present
+  when: is_macos
+  tags: ['mas']
+
 # Mac App Store
 - name: Check Mac App Store registration
   ansible.builtin.command: mas list
   register: mas_list
   changed_when: false
   check_mode: no
+  ignore_errors: yes
   tags: ['mas']
 
 - name: Check if Mac App Store apps exist
@@ -32,7 +41,7 @@
         id: "{{ item.0.id }}"
         state: present
       loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list | zip(mas_app_check.results) | list }}"
-      when: not item.1.stat.exists
+      when: not item.1.stat.exists and mas_list.rc == 0
       register: mas_installation
   rescue:
     - name: Handle MAS installation failure
@@ -48,6 +57,12 @@
   loop_control:
     label: "{{ item.item.0.name }}"
   when: item is defined and item.item is defined
+  tags: ['mas']
+
+- name: Warn if Mac App Store is not accessible
+  debug:
+    msg: "Warning: Mac App Store is not accessible. Some applications may not be installed."
+  when: mas_list.rc != 0
   tags: ['mas']
 
 # Homebrew Applications
