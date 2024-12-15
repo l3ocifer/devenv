@@ -254,7 +254,7 @@ main() {
         git clone https://github.com/l3ocifer/devenv.git ~/git/devenv || error "Failed to clone devenv repository"
     else
         log "Updating devenv repository..."
-        (cd ~/git/devenv && git pull) || error "Failed to update devenv repository"
+        (cd ~/git/devenv && git stash && git pull && git stash pop) || error "Failed to update devenv repository"
     fi
 
     # Run Ansible playbook

@@ -71,7 +71,8 @@
   git:
     repo: "{{ devenv_repo }}"
     dest: "{{ devenv_dir }}"
-    version: main
+    version: master
+    force: yes
     update: yes
   tags: ['git']
 
@@ -79,6 +80,7 @@
   git:
     repo: "{{ scripts_repo }}"
     dest: "{{ scripts_dir }}"
-    version: main
+    version: master
+    force: yes
     update: yes
   tags: ['git']
