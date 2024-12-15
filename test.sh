@@ -30,13 +30,16 @@ function install_vagrant_plugin() {
     local plugin=$1
     if ! vagrant plugin list | grep -q "$plugin"; then
         echo "Installing the '$plugin' plugin..."
-        # Try installing directly from RubyGems first
-        if ! vagrant plugin install "$plugin"; then
-            echo "Failed to install from RubyGems, trying alternative sources..."
-            if [[ "$plugin" == "vagrant-utm" ]]; then
-                # Install vagrant-utm directly from GitHub
-                vagrant plugin install vagrant-utm --plugin-source https://rubygems.org
-            else
+        if [[ "$plugin" == "vagrant-utm" ]]; then
+            # Install vagrant-utm directly from GitHub
+            if ! vagrant plugin install vagrant-utm --plugin-source https://github.com/vagrant-utm/vagrant-utm.git; then
+                echo -e "${RED}Failed to install vagrant-utm plugin${NC}"
+                echo "Please try manually:"
+                echo "vagrant plugin install vagrant-utm --plugin-source https://github.com/vagrant-utm/vagrant-utm.git"
+                return 1
+            fi
+        else
+            if ! vagrant plugin install "$plugin"; then
                 echo -e "${RED}Failed to install plugin: $plugin${NC}"
                 return 1
             fi
