@@ -1,71 +1,91 @@
 ---
-# Platform-specific configurations
+# Platform detection
 platform: "{{ ansible_os_family | lower }}"
 is_macos: "{{ ansible_os_family == 'Darwin' }}"
 is_linux: "{{ ansible_os_family == 'Debian' }}"
 is_wsl: "{{ ansible_env.WSL_DISTRO_NAME is defined }}"
 
-# Directory structure
+# Core paths
 git_base_dir: "~/git"
+scripts_dir: "~/.scripts"
+devenv_dir: "{{ git_base_dir }}/devenv"
+secrets_file: "~/.config/personal/secrets.yml"
+
+# Repository URLs
 devenv_repo: "https://github.com/l3ocifer/devenv.git"
 scripts_repo: "https://github.com/l3ocifer/scripts.git"
 
-# Directory paths
-scripts_dir: "~/.scripts"
-devenv_dir: "{{ git_base_dir }}/devenv"
-
-# Secrets file location (to be manually copied)
-secrets_file: "~/.config/personal/secrets.yml"
-
 # Mac OS Applications
 macos_apps:
-  # Mac App Store Applications
-  - { name: "TestFlight", id: "899247664" }
-  - { name: "WYZE", id: "1288415553" }
-  - { name: "ChatGPT", id: "6448311069" }
-  - { name: "Claude", id: "6470116884" }
-
-  # Homebrew Applications
-  - { name: "Alacritty", brew: "alacritty" }
+  # Essential Development Tools
   - { name: "Cursor", brew: "cursor" }
   - { name: "Zed", brew: "zed" }
   - { name: "Pulsar", brew: "pulsar" }
   - { name: "Logseq", brew: "logseq" }
+  
+  # Development Infrastructure
   - { name: "Docker", brew: "docker" }
   - { name: "Colima", brew: "colima" }
   - { name: "Podman", brew: "podman" }
+  
+  # Browsers and Communication
   - { name: "Google Chrome", brew: "google-chrome" }
   - { name: "Brave Browser", brew: "brave-browser" }
-  - { name: "OBS", brew: "obs" }
-  - { name: "Miniconda", brew: "miniconda" }
-  - { name: "VLC", brew: "vlc" }
   - { name: "Thunderbird", brew: "thunderbird" }
-
-  # Direct Download Applications
+  - { name: "ChatGPT", id: "6448311069" }
+  - { name: "Claude", id: "6470116884" }
+  
+  # System Tools
+  - { name: "Alacritty", brew: "alacritty" }
+  - { name: "TestFlight", id: "899247664" }
+  - { name: "WYZE", id: "1288415553" }
+  - { name: "OBS", brew: "obs" }
+  - { name: "VLC", brew: "vlc" }
+  - { name: "Miniconda", brew: "miniconda" }
+  
+  # AI Tools
   - { name: "Wispr Flow", url: "https://wisprflow.com" }
 
-# Testing configurations
-test_environments:
-  - name: "macos-latest"
-    container: false
-    platform: "darwin"
-  - name: "ubuntu-latest"
-    container: "ubuntu:latest"
-    platform: "debian"
-  - name: "wsl-ubuntu"
-    container: "ubuntu:latest"
-    platform: "debian"
-    wsl: true
+# Programming Languages
+languages:
+  python:
+    version: "3.11"
+    packages:
+      - ipython
+      - pytest
+      - black
+      - flake8
+      - mypy
+  node:
+    version: "20"
+    packages:
+      - typescript
+      - yarn
+  ruby:
+    version: "3.2.0"
+    gems:
+      - bundler
+      - rails
+  go:
+    version: "1.21"
 
-# Shell configuration
-shell_config:
-  zsh_theme: "robbyrussell"
-  enable_plugins:
-    - git
-    - nvm
-    - zsh-autosuggestions
-    - zsh-syntax-highlighting
+# DevOps Tools
+devops_tools:
+  - aws-cli
+  - terraform
+  - kubectl
+  - helm
+  - k9s
 
-# SSH configuration
-ssh_config_dir: "~/.ssh"
-ssh_keys_source: "{{ playbook_dir }}/files/ssh"
+# Shell Tools
+shell_tools:
+  - thefuck
+  - starship
+  - zoxide
+  - atuin
+  - ripgrep
+  - fd
+  - bat
+  - exa
+  - tmux
+  - direnv
