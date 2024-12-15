@@ -116,6 +116,11 @@ DerivedData/
 *.perspectivev3
 !default.perspectivev3
 
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # Test coverage
 coverage/
 .coverage
@@ -131,4 +136,3 @@ coverage.xml
 *.tmp
 .history/
 *.patch
-.DS_Store

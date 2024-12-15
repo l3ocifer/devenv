@@ -22,10 +22,20 @@
   no_log: true
   tags: ['ssh']
 
+- name: Start SSH agent
+  shell: |
+    if ! pgrep -u $USER ssh-agent > /dev/null; then
+      eval $(ssh-agent -s)
+    fi
+  register: ssh_agent_start
+  changed_when: false
+  tags: ['ssh']
+
 - name: Add SSH keys to agent
   shell: |
-    eval $(ssh-agent -s)
-    ssh-add {{ ssh_config_dir }}/{{ item.name }}
-  with_items: "{{ ssh_keys | default([]) }}"
-  when: item.name.endswith('_rsa') or item.name.endswith('_ed25519')
+    if ! ssh-add -l | grep -q "{{ item.name }}"; then
+      ssh-add {{ ssh_config_dir }}/{{ item.name }}
+    fi
+  with_items: "{{ ssh_keys | default([]) | selectattr('name', 'match', '.*(?<!\.pub)$') | list }}"
+  when: not item.name.endswith('.pub')
   tags: ['ssh']

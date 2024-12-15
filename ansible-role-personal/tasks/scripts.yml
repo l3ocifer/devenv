@@ -7,31 +7,6 @@
     mode: '0755'
   tags: ['scripts']
 
-# Clone or update scripts repository
-- name: Check if scripts repository exists
-  stat:
-    path: "{{ scripts_dir }}/.git"
-  register: scripts_git
-  tags: ['scripts']
-
-- name: Clone scripts repository if not exists
-  git:
-    repo: "{{ scripts_repo }}"
-    dest: "{{ scripts_dir }}"
-    version: main
-    accept_hostkey: yes
-  when: not scripts_git.stat.exists
-  tags: ['scripts']
-
-- name: Update scripts repository if exists
-  git:
-    repo: "{{ scripts_repo }}"
-    dest: "{{ scripts_dir }}"
-    version: main
-    update: yes
-  when: scripts_git.stat.exists
-  tags: ['scripts']
-
 # Set proper permissions
 - name: Set scripts permissions
   file:

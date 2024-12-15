@@ -178,8 +178,14 @@ setup_macos() {
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || error "Failed to install Homebrew"
     fi
 
-    # Ensure Homebrew is in PATH
-    eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || eval "$(/usr/local/bin/brew shellenv)" 2>/dev/null
+    # Ensure Homebrew is in PATH (handle both Apple Silicon and Intel Macs)
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f /usr/local/bin/brew ]]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    else
+        error "Homebrew installation path not found"
+    fi
 
     # Install Python and Ansible
     brew install python3 ansible || error "Failed to install Python and Ansible"

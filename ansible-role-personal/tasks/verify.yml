@@ -33,7 +33,7 @@
   failed_when: tool_check.rc != 0
   with_items:
     - git --version
-    - python3 --version
+    - python3 -c "import sys; assert sys.version_info >= (3, 9), 'Python 3.9+ required'"
     - curl --version
     - zsh --version
 

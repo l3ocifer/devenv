@@ -46,16 +46,19 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  # macOS environment (requires vagrant-parallels plugin)
+  # macOS environment (using VirtualBox)
   config.vm.define "macos" do |macos|
-    macos.vm.box = "yzgyyang/macOS-12"
+    macos.vm.box = "yzgyyang/macOS-monterey-arm64"
     macos.vm.hostname = "macos-test"
-    macos.vm.provider "parallels" do |prl|
-      prl.memory = "4096"
-      prl.cpus = 2
+    macos.vm.provider "virtualbox" do |vb|
+      vb.memory = "4096"
+      vb.cpus = 2
+      vb.customize ["modifyvm", :id, "--cpuidset", "00000001", "000106e5", "00100800", "0098e3fd", "bfebfbff"]
+      vb.customize ["modifyvm", :id, "--cpu-profile", "Intel Core i7-6700K"]
+      vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
     end
     macos.vm.provision "shell", inline: <<-SHELL
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
       brew install ansible
     SHELL
     macos.vm.provision "ansible_local" do |ansible|

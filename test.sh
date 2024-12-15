@@ -42,7 +42,26 @@ install_prerequisites() {
 
     # Install required Vagrant plugins
     echo "Installing Vagrant plugins..."
-    vagrant plugin install vagrant-parallels vagrant-vbguest
+    vagrant plugin install vagrant-vbguest
+}
+
+# Function to cleanup VMs
+cleanup_vms() {
+    local platform=$1
+    local force=$2
+    
+    echo -e "${YELLOW}Cleaning up $platform environment...${NC}"
+    
+    # Check if VM exists
+    if vagrant status $platform 2>/dev/null | grep -q "$platform"; then
+        if [ "$force" = "true" ] || [ "$CLEANUP" = "true" ]; then
+            vagrant destroy -f $platform &>/dev/null
+            echo -e "${GREEN}✓ Cleaned up $platform environment${NC}"
+        else
+            echo -e "${YELLOW}⚠ $platform VM left intact for debugging${NC}"
+            echo "To destroy manually, run: vagrant destroy -f $platform"
+        fi
+    fi
 }
 
 # Function to run tests for a specific platform
@@ -61,6 +80,7 @@ run_platform_tests() {
         if [ $? -ne 0 ]; then
             echo -e "${RED}Failed to start $platform environment${NC}"
             echo "See vagrant-$platform.log for details"
+            cleanup_vms $platform false
             return 1
         fi
 
@@ -69,21 +89,22 @@ run_platform_tests() {
         if [ $? -ne 0 ]; then
             echo -e "${RED}Provisioning failed for $platform${NC}"
             echo "See provision-$platform.log for details"
+            cleanup_vms $platform false
             return 1
         fi
 
         # Run verification tests
-        vagrant ssh $platform -c "
-            ansible-playbook main.yml --tags verify
-        " &> "verify-$platform.log"
+        vagrant ssh $platform -c "ansible-playbook main.yml --tags verify" &> "verify-$platform.log"
+        test_result=$?
         
-        if [ $? -eq 0 ]; then
+        if [ $test_result -eq 0 ]; then
             echo -e "${GREEN}All tests passed for $platform${NC}"
-            vagrant destroy -f &> /dev/null
+            cleanup_vms $platform true
             return 0
         else
             echo -e "${RED}Tests failed for $platform${NC}"
             echo "See verify-$platform.log for details"
+            cleanup_vms $platform false
             return 1
         fi
     })
@@ -91,7 +112,7 @@ run_platform_tests() {
     # Store the result
     result=$?
     
-    # Clean up
+    # Clean up test directory
     rm -rf "$test_dir"
     
     return $result
@@ -99,6 +120,16 @@ run_platform_tests() {
 
 # Main testing function
 main() {
+    # Check for cleanup flag
+    CLEANUP=false
+    while getopts "c" opt; do
+        case $opt in
+            c) CLEANUP=true ;;
+            \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
     # Install prerequisites
     install_prerequisites
 
@@ -125,15 +156,23 @@ main() {
         fi
     done
 
-    # Clean up
+    # Clean up results directory
     cd - > /dev/null
     rm -rf "$results_dir"
 
-    # Final status
+    # Final status and instructions
     if [ $failed -eq 0 ]; then
         echo -e "${GREEN}All platform tests completed successfully!${NC}"
+        echo -e "${GREEN}All test environments have been cleaned up.${NC}"
     else
         echo -e "${RED}Some platform tests failed. Check the logs for details.${NC}"
+        if [ "$CLEANUP" = "true" ]; then
+            echo -e "${YELLOW}All environments have been cleaned up due to -c flag${NC}"
+        else
+            echo -e "${YELLOW}Failed environments have been left intact for debugging.${NC}"
+            echo "To clean up all environments, run: $0 -c"
+            echo "To clean up a specific environment, run: vagrant destroy -f <platform>"
+        fi
     fi
 
     exit $failed
