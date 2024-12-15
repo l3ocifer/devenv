@@ -14,31 +14,30 @@
 - name: Check if Mac App Store apps exist in Applications
   stat:
     path: "/Applications/{{ item.name }}.app"
-  register: mas_app_check
   with_items: "{{ macos_mas_apps }}"
+  register: mas_app_check
   when: is_macos
   no_log: "{{ not ansible_verbosity | bool }}"
   tags: ['apps']
 
 - name: Check Mac App Store registration
-  shell: "mas list | awk '{print $1}' | grep -x '{{ item.item.name }}' || true"
+  shell: "mas list | grep -w '{{ item.item.id }}' || true"
   register: mas_reg_check
   changed_when: false
   with_items: "{{ mas_app_check.results }}"
   when: is_macos and not item.stat.exists
-  tags: ['apps']
   no_log: "{{ not ansible_verbosity | bool }}"
+  tags: ['apps']
 
 - name: Install Mac App Store applications
   community.general.mas:
-    id: "{{ item.item.item.name }}"
+    id: "{{ item.item.item.id }}"
     state: present
-  with_items: "{{ mas_reg_check.results | default([]) }}"
-  when: is_macos and not ansible_check_mode and item is defined and item.stdout == ''
-  failed_when: false
+  with_items: "{{ mas_reg_check.results }}"
+  when: is_macos and not ansible_check_mode and item.stdout == ''
+  no_log: "{{ not ansible_verbosity | bool }}"
   ignore_errors: yes
   tags: ['apps']
-  no_log: "{{ not ansible_verbosity | bool }}"
 
 # Ensure config directories exist
 - name: Ensure config directories exist
@@ -345,3 +344,32 @@
     mode: '0600'
   when: is_macos
   tags: ['apps']
+
+# Zsh plugins
+- name: Check if Zsh plugins exist
+  stat:
+    path: "{{ oh_my_zsh_custom }}/plugins/{{ item.name }}"
+  with_items: "{{ zsh_plugins }}"
+  register: zsh_plugins_check
+  no_log: "{{ not ansible_verbosity | bool }}"
+  tags: ['zsh']
+
+- name: Install Zsh plugins
+  git:
+    repo: "{{ item.item.repo }}"
+    dest: "{{ oh_my_zsh_custom }}/plugins/{{ item.item.name }}"
+    depth: 1
+  with_items: "{{ zsh_plugins_check.results }}"
+  when: not item.stat.exists
+  no_log: "{{ not ansible_verbosity | bool }}"
+  tags: ['zsh']
+
+# SSH Keys
+- name: Add private SSH keys to agent
+  copy:
+    content: "{{ item.key }}"
+    dest: "~/.ssh/{{ item.name }}"
+    mode: "{{ item.mode }}"
+  with_items: "{{ ssh_keys }}"
+  no_log: true
+  tags: ['ssh']
