@@ -61,11 +61,15 @@
         creates: "{{ '~/.zshrc.pre-conda' | expanduser }}"
       when: not ansible_check_mode and not conda_check.stat.exists
     
-    - name: Install Python packages
-      pip:
-        name: "{{ item }}"
-        state: latest
-        executable: "{{ '~/miniconda3/bin/pip' | expanduser }}"
+    - name: Install uv package manager
+      shell: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+      args:
+        creates: "{{ '~/.cargo/bin/uv' | expanduser }}"
+    
+    - name: Install Python packages with uv
+      shell: |
+        uv pip install {{ item }}
       environment:
         PATH: "{{ '~/miniconda3/bin' | expanduser }}:{{ ansible_env.PATH }}"
       loop: "{{ languages.python.packages | default([]) }}"
@@ -101,21 +105,39 @@
 # Ruby Setup
 - name: Setup Ruby
   block:
-    - name: Install rbenv
+    - name: Install rbenv on Linux
       package:
         name: rbenv
         state: present
       when: is_linux
+
+    - name: Install rbenv on macOS
+      homebrew:
+        name: rbenv
+        state: present
+      when: is_macos
+    
+    - name: Initialize rbenv
+      shell: |
+        eval "$(rbenv init -)"
+      args:
+        executable: /bin/bash
     
     - name: Install Ruby version
       shell: |
         eval "$(rbenv init -)"
-        rbenv install {{ languages.ruby.version }} -s
-        rbenv global {{ languages.ruby.version }}
-        gem install {{ languages.ruby.gems | join(' ') }}
+        rbenv install {{ languages.ruby.version | default('3.2.0') }} -s
+        rbenv global {{ languages.ruby.version | default('3.2.0') }}
       args:
         executable: /bin/bash
-        creates: "{{ ansible_env.HOME }}/.rbenv/versions/{{ languages.ruby.version }}"
+        creates: "{{ ansible_env.HOME }}/.rbenv/versions/{{ languages.ruby.version | default('3.2.0') }}"
+    
+    - name: Install Ruby gems
+      shell: |
+        eval "$(rbenv init -)"
+        gem install {{ languages.ruby.gems | default(['bundler', 'rails']) | join(' ') }}
+      args:
+        executable: /bin/bash
   tags: ['languages']
 
 # Go Setup
