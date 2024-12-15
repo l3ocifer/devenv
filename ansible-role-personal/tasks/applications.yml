@@ -3,7 +3,6 @@
 - name: Update Homebrew
   community.general.homebrew:
     update_homebrew: yes
-    quiet: true
   environment:
     HOMEBREW_NO_AUTO_UPDATE: 1
     HOMEBREW_NO_INSTALL_CLEANUP: 1
@@ -82,7 +81,6 @@
     name: "{{ item.item.brew }}"
     state: present
     greedy: true
-    quiet: true
   environment:
     HOMEBREW_NO_AUTO_UPDATE: 1
     HOMEBREW_NO_INSTALL_CLEANUP: 1
@@ -158,7 +156,6 @@
   community.general.homebrew:
     name: "{{ item.item }}"
     state: present
-    quiet: true
   environment:
     HOMEBREW_NO_AUTO_UPDATE: 1
     HOMEBREW_NO_INSTALL_CLEANUP: 1
