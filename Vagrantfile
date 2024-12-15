@@ -1,14 +1,27 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+require 'rbconfig'
+
+def is_arm_mac?
+  RUBY_PLATFORM.include?('arm64') && RbConfig::CONFIG['host_os'].include?('darwin')
+end
+
+def get_provider
+  is_arm_mac? ? 'utm' : 'virtualbox'
+end
+
 Vagrant.configure("2") do |config|
   # Ubuntu (Linux) environment
   config.vm.define "ubuntu" do |ubuntu|
     ubuntu.vm.box = "ubuntu/focal64"
     ubuntu.vm.hostname = "ubuntu-test"
-    ubuntu.vm.provider "virtualbox" do |vb|
-      vb.memory = "2048"
-      vb.cpus = 2
+    ubuntu.vm.provider get_provider do |provider|
+      provider.memory = "2048"
+      provider.cpus = 2
+      if provider.name == 'utm'
+        provider.ssh_port = 22
+      end
     end
     ubuntu.vm.provision "shell", inline: <<-SHELL
       apt-get update
@@ -28,9 +41,12 @@ Vagrant.configure("2") do |config|
   config.vm.define "wsl" do |wsl|
     wsl.vm.box = "ubuntu/focal64"
     wsl.vm.hostname = "wsl-test"
-    wsl.vm.provider "virtualbox" do |vb|
-      vb.memory = "2048"
-      vb.cpus = 2
+    wsl.vm.provider get_provider do |provider|
+      provider.memory = "2048"
+      provider.cpus = 2
+      if provider.name == 'utm'
+        provider.ssh_port = 22
+      end
     end
     wsl.vm.provision "shell", inline: <<-SHELL
       apt-get update
@@ -48,16 +64,27 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  # macOS environment (using VirtualBox)
+  # macOS environment (using VirtualBox or UTM)
   config.vm.define "macos" do |macos|
-    macos.vm.box = "yzgyyang/macOS-monterey-arm64"
+    if is_arm_mac?
+      macos.vm.box = "yzgyyang/macOS-monterey-arm64"
+      macos.vm.box_url = "https://utm.app/boxes/monterey-arm64.box"
+    else
+      macos.vm.box = "yzgyyang/macOS-monterey"
+    end
     macos.vm.hostname = "macos-test"
-    macos.vm.provider "virtualbox" do |vb|
-      vb.memory = "4096"
-      vb.cpus = 2
-      vb.customize ["modifyvm", :id, "--cpuidset", "00000001", "000106e5", "00100800", "0098e3fd", "bfebfbff"]
-      vb.customize ["modifyvm", :id, "--cpu-profile", "Intel Core i7-6700K"]
-      vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
+    macos.vm.provider get_provider do |provider|
+      if provider.name == 'virtualbox'
+        provider.memory = "4096"
+        provider.cpus = 2
+        provider.customize ["modifyvm", :id, "--cpuidset", "00000001", "000106e5", "00100800", "0098e3fd", "bfebfbff"]
+        provider.customize ["modifyvm", :id, "--cpu-profile", "Intel Core i7-6700K"]
+        provider.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
+      else
+        provider.memory = "4096"
+        provider.cpus = 2
+        provider.ssh_port = 22
+      end
     end
     macos.vm.provision "shell", inline: <<-SHELL
       # Install Homebrew

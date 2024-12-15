@@ -43,19 +43,25 @@
 
 # Create required directories
 - name: Create Syncthing directories
-  file:
-    path: "{{ item | expanduser }}"
+  ansible.builtin.file:
+    path: "{{ item }}"
     state: directory
-    mode: '0700'
-  with_items:
+    mode: '0755'
+  loop:
     - "~/.config/syncthing"
-  tags: ['syncthing']
+
+- name: Load secrets from config directory
+  ansible.builtin.include_vars:
+    file: "{{ secrets_file }}"
+    name: app_secrets
+  ignore_errors: true
 
 - name: Update secrets file with Syncthing configuration
-  include_vars:
-    file: "{{ playbook_dir }}/secrets.yml"
-    name: app_secrets
-  tags: ['syncthing']
+  ansible.builtin.template:
+    src: syncthing.yml.j2
+    dest: "{{ secrets_file }}"
+    mode: '0600'
+  when: app_secrets is not defined or app_secrets.syncthing is not defined
 
 - name: Configure Syncthing
   block:
