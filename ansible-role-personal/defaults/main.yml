@@ -61,6 +61,8 @@ macos_apps:
     brew: "logseq"
   - name: "Docker"
     brew: "docker"
+  - name: "Vagrant"
+    brew: "vagrant"
   
   # Browsers
   - name: "Google Chrome"
@@ -113,9 +115,8 @@ cli_tools:
       - "ansible"
       - "ansible-lint"
       - "packer"
-      - "vagrant"
       - "vault"
-      - "minio-client"
+      - "minio-mc"
       - "dive"  # Docker image explorer
       - "lazydocker"
       - "k6"  # Load testing
@@ -129,7 +130,7 @@ cli_tools:
     packages:
       - "prometheus"
       - "grafana"
-      - "vector"  # Log collector
+      - "vector-bin"  # Log collector
       - "loki"    # Log aggregation
 
 # Programming Languages

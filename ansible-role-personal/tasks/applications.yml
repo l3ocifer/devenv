@@ -60,6 +60,10 @@
   community.general.homebrew_cask:
     name: "{{ item.item.brew }}"
     state: present
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
   loop: "{{ app_check.results }}"
   when: not item.stat.exists
   register: brew_install
@@ -157,6 +161,8 @@
     state: link
     force: true
   loop: "{{ config_symlinks }}"
+  loop_control:
+    label: "{{ item.dest | basename }}"
   tags: ['config']
 
 # CLI Tools Installation

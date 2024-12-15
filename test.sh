@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Function to check and install prerequisites
+# Function to install prerequisites
 install_prerequisites() {
     echo -e "${YELLOW}Checking and installing prerequisites...${NC}"
     
@@ -29,14 +29,6 @@ install_prerequisites() {
             brew install --cask virtualbox
         else
             sudo apt-get update && sudo apt-get install virtualbox
-        fi
-    fi
-
-    # Check for Parallels (macOS only)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        if ! command -v prlctl &> /dev/null; then
-            echo "Please install Parallels Desktop manually from https://www.parallels.com/"
-            echo "Then install the vagrant-parallels plugin: vagrant plugin install vagrant-parallels"
         fi
     fi
 

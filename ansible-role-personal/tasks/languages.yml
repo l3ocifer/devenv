@@ -1,30 +1,4 @@
 ---
-# Common Development Tools
-- name: Check if CLI tools are installed
-  command: "brew list --formula {{ item.name }}"
-  register: cli_check
-  changed_when: false
-  failed_when: false
-  no_log: true
-  loop: "{{ cli_tools }}"
-  loop_control:
-    label: "{{ item.name }}"
-  tags: ['languages']
-
-- name: Install CLI tools
-  community.general.homebrew:
-    name: "{{ item.item.packages }}"
-    state: present
-  environment:
-    HOMEBREW_NO_AUTO_UPDATE: 1
-    HOMEBREW_NO_INSTALL_CLEANUP: 1
-    HOMEBREW_NO_ENV_HINTS: 1
-  loop: "{{ cli_check.results }}"
-  when: is_macos and item.rc != 0 and not ansible_check_mode
-  loop_control:
-    label: "{{ item.item.name }}"
-  tags: ['languages']
-
 # Rust Installation and Update
 - name: Check if Rust is installed
   stat:
@@ -60,37 +34,24 @@
         url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-{{ 'MacOSX' if is_macos else 'Linux' }}-{{ 'arm64' if ansible_architecture == 'arm64' else 'x86_64' }}.sh"
         dest: "/tmp/miniconda.sh"
         mode: '0755'
-      when: not ansible_check_mode and not conda_check.stat.exists
-    
+      when: not conda_check.stat.exists
+      tags: ['languages']
+
     - name: Run miniconda installer
-      shell: /tmp/miniconda.sh -b -p {{ '~/miniconda3' | expanduser }}
+      shell: "/tmp/miniconda.sh -b -p {{ '~/miniconda3' | expanduser }}"
       args:
         creates: "{{ '~/miniconda3/bin/conda' | expanduser }}"
-      when: not ansible_check_mode and not conda_check.stat.exists
-    
-    - name: Initialize conda in shell
+      when: not conda_check.stat.exists
+      tags: ['languages']
+
+    - name: Initialize conda
       shell: |
-        {{ '~/miniconda3/bin/conda' | expanduser }} init zsh
+        source {{ '~/miniconda3/bin/activate' | expanduser }}
+        conda init zsh
       args:
-        creates: "{{ '~/.zshrc.pre-conda' | expanduser }}"
-      when: not ansible_check_mode and not conda_check.stat.exists
-    
-    - name: Install uv package manager
-      shell: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-      args:
-        creates: "{{ '~/.cargo/bin/uv' | expanduser }}"
-    
-    - name: Install Python packages with uv
-      shell: |
-        uv pip install {{ item }}
-      environment:
-        PATH: "{{ '~/miniconda3/bin' | expanduser }}:{{ ansible_env.PATH }}"
-      loop: "{{ languages.python.packages | default([]) }}"
-      loop_control:
-        label: "{{ item }}"
-      when: languages.python.packages is defined
-  tags: ['languages']
+        executable: /bin/zsh
+      when: not conda_check.stat.exists
+      tags: ['languages']
 
 # Node.js Setup
 - name: Check if nvm is installed

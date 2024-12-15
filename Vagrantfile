@@ -18,7 +18,8 @@ Vagrant.configure("2") do |config|
     ubuntu.vm.provision "ansible_local" do |ansible|
       ansible.playbook = "main.yml"
       ansible.extra_vars = {
-        ansible_python_interpreter: "/usr/bin/python3"
+        ansible_python_interpreter: "/usr/bin/python3",
+        is_linux: true
       }
     end
   end
@@ -41,7 +42,8 @@ Vagrant.configure("2") do |config|
     wsl.vm.provision "ansible_local" do |ansible|
       ansible.playbook = "main.yml"
       ansible.extra_vars = {
-        ansible_python_interpreter: "/usr/bin/python3"
+        ansible_python_interpreter: "/usr/bin/python3",
+        is_wsl: true
       }
     end
   end
@@ -58,11 +60,19 @@ Vagrant.configure("2") do |config|
       vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
     end
     macos.vm.provision "shell", inline: <<-SHELL
-      /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+      # Install Homebrew
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      # Add Homebrew to PATH
+      (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> ~/.zshrc
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+      # Install Ansible
       brew install ansible
     SHELL
     macos.vm.provision "ansible_local" do |ansible|
       ansible.playbook = "main.yml"
+      ansible.extra_vars = {
+        is_macos: true
+      }
     end
   end
 end
