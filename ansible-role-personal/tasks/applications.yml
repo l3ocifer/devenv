@@ -397,11 +397,19 @@
     mode: '0644'
   tags: ['ai']
 
+- name: Check if {{ ai_model_name }} model exists
+  shell: "ollama list | grep {{ ai_model_name }}"
+  register: model_check
+  changed_when: false
+  failed_when: false
+  when: is_macos
+  tags: ['ai']
+
 - name: Pull {{ ai_model_name }} model for ollama
-  shell: "ollama pull {{ ai_model_name }} -q"
+  shell: "ollama pull {{ ai_model_name }}"
   register: ollama_pull
   changed_when: ollama_pull.rc == 0
-  when: is_macos
+  when: is_macos and model_check.rc != 0
   tags: ['ai']
 
 # Zsh plugins
