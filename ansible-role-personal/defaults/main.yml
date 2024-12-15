@@ -74,29 +74,80 @@ macos_homebrew_apps:
     cask: false
   - name: "act"
     cask: false
-macos_apps:
+
+# Desktop Applications
+desktop_apps:
   # Development Tools
   - name: "Cursor"
     brew: "cursor"
+    package: "cursor"
+    wsl_compatible: false
   - name: "Zed"
     brew: "zed"
+    wsl_compatible: false
   - name: "Pulsar"
     brew: "pulsar"
+    wsl_compatible: false
   - name: "Logseq"
     brew: "logseq"
+    wsl_compatible: false
   - name: "Docker"
     brew: "docker"
+    package: "docker-ce"
+    wsl_compatible: true
   - name: "Vagrant"
     brew: "vagrant"
+    package: "vagrant"
+    wsl_compatible: true
   
   # Browsers
   - name: "Google Chrome"
     brew: "google-chrome"
+    package: "google-chrome-stable"
+    wsl_compatible: false
   - name: "Brave Browser"
     brew: "brave-browser"
+    package: "brave-browser"
+    wsl_compatible: false
   - name: "Thunderbird"
     brew: "thunderbird"
+    package: "thunderbird"
+    wsl_compatible: false
+
+  # AI Tools
+  - name: "Wispr Flow"
+    url: "https://wisprflow.com"
+    wsl_compatible: false
+
+# Linux repositories
+linux_repositories:
+  - ppa:cursor/cursor
+  - ppa:brave-browser/brave-browser
+
+# Linux Applications
+linux_apps:
+  # Development Tools
+  - name: "Cursor"
+    package: "cursor"
+  - name: "Zed"
+    package: "zed"
+  - name: "Pulsar"
+    package: "pulsar"
+  - name: "Logseq"
+    package: "logseq"
+  - name: "Docker"
+    package: "docker-ce"
+  - name: "Vagrant"
+    package: "vagrant"
   
+  # Browsers
+  - name: "Google Chrome"
+    package: "google-chrome-stable"
+  - name: "Brave Browser"
+    package: "brave-browser"
+  - name: "Thunderbird"
+    package: "thunderbird"
+
   # AI Tools
   - name: "Wispr Flow"
     url: "https://wisprflow.com"

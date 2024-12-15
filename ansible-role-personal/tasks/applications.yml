@@ -57,7 +57,7 @@
 - name: Check desktop applications (macOS)
   ansible.builtin.stat:
     path: "/Applications/{{ item.name }}.app"
-  loop: "{{ macos_apps | selectattr('brew', 'defined') | list }}"
+  loop: "{{ desktop_apps | selectattr('brew', 'defined') | list }}"
   register: app_check
   loop_control:
     label: "{{ item.name }}"
@@ -77,54 +77,24 @@
   register: brew_install
   tags: ['apps']
 
-- name: Check desktop applications (Linux)
-  ansible.builtin.stat:
-    path: "/usr/bin/{{ item.name }}"
-  loop: "{{ linux_apps | selectattr('package', 'defined') | list }}"
-  register: app_check_linux
-  loop_control:
-    label: "{{ item.name }}"
-  when: is_linux
-  tags: ['apps']
-
-- name: Install desktop applications via apt (Linux)
-  package:
-    name: "{{ item.item.package }}"
+# Linux/WSL Applications
+- name: Add apt repositories (Linux/WSL)
+  apt_repository:
+    repo: "{{ item }}"
     state: present
-  loop: "{{ app_check_linux.results }}"
-  when: is_linux and not item.stat.exists
-  register: apt_install
+    update_cache: yes
+  loop: "{{ linux_repositories }}"
+  become: true
+  when: is_linux or is_wsl
   tags: ['apps']
 
-# Linux Applications
 - name: Install Linux desktop applications
-  block:
-    - name: Add apt repositories
-      apt_repository:
-        repo: "{{ item }}"
-        state: present
-        update_cache: yes
-      loop:
-        - ppa:cursor/cursor
-        - ppa:brave-browser/brave-browser
-      become: true
-      when: is_linux
-
-    - name: Install Linux desktop applications
-      package:
-        name:
-          - cursor
-          - brave-browser
-          - google-chrome-stable
-          - thunderbird
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - vagrant
-        state: present
-      become: true
-      when: is_linux
-  when: is_linux
+  package:
+    name: "{{ desktop_apps | selectattr('package', 'defined') | map(attribute='package') | list }}"
+    state: present
+  become: true
+  when: (is_linux and not is_wsl) or (is_wsl and item.wsl_compatible | default(false))
+  register: apt_install
   tags: ['apps']
 
 - name: Display Homebrew status
@@ -138,11 +108,8 @@
 
 - name: Display apt status
   ansible.builtin.debug:
-    msg: "App: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
-  loop: "{{ apt_install.results }}"
-  loop_control:
-    label: "{{ item.item.item.name }}"
-  when: is_linux
+    msg: "Package installation status: {{ 'installed' if apt_install.changed else 'exists' }}"
+  when: is_linux or is_wsl
   tags: ['apps']
 
 # CLI Development Tools
