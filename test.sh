@@ -168,41 +168,35 @@ cleanup_virtualbox() {
 }
 
 check_virtualbox() {
-    echo -e "${YELLOW}Checking VirtualBox status...${NC}"
-    
-    # Check if VBoxManage exists
-    if ! command -v VBoxManage >/dev/null 2>&1; then
-        echo -e "${RED}VirtualBox is not installed. Please install VirtualBox first.${NC}"
-        exit 1
+    echo "Checking VirtualBox status..."
+    if ! command -v VBoxManage &> /dev/null; then
+        echo "VBoxManage not found. Please install VirtualBox."
+        return 1
     fi
-    
-    # Check kernel modules on macOS
-    if [[ "$(uname)" == "Darwin" ]]; then
-        echo "Executing: /usr/bin/kmutil showloaded"
-        /usr/bin/kmutil showloaded | grep -i virtualbox || true
-        
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "Loading VirtualBox kernel extensions..."
-        sudo kextload -b org.virtualbox.kext.VBoxDrv || true
-        sudo kextload -b org.virtualbox.kext.VBoxNetFlt || true
-        sudo kextload -b org.virtualbox.kext.VBoxNetAdp || true
-        sudo kextload -b org.virtualbox.kext.VBoxUSB || true
+        # First try loading normally
+        sudo kextload -b org.virtualbox.kext.VBoxDrv 2>/dev/null || true
+        sudo kextload -b org.virtualbox.kext.VBoxNetFlt 2>/dev/null || true
+        sudo kextload -b org.virtualbox.kext.VBoxNetAdp 2>/dev/null || true
+        sudo kextload -b org.virtualbox.kext.VBoxUSB 2>/dev/null || true
         
-        # Force unload and reload of kernel modules
-        echo "Force reloading VirtualBox kernel modules..."
-        sudo kextunload -b org.virtualbox.kext.VBoxDrv || true
-        sudo kextunload -b org.virtualbox.kext.VBoxNetFlt || true
-        sudo kextunload -b org.virtualbox.kext.VBoxNetAdp || true
-        sudo kextunload -b org.virtualbox.kext.VBoxUSB || true
-        
-        sleep 10  # Give system time to clean up
-        
-        sudo kextload -b org.virtualbox.kext.VBoxDrv || true
-        sudo kextload -b org.virtualbox.kext.VBoxNetFlt || true
-        sudo kextload -b org.virtualbox.kext.VBoxNetAdp || true
-        sudo kextload -b org.virtualbox.kext.VBoxUSB || true
-        
-        sleep 5  # Give modules time to initialize
+        # Check if modules are loaded
+        if ! kextstat | grep -q "org.virtualbox.kext.VBoxDrv"; then
+            echo "VirtualBox kernel modules not loaded. Try reinstalling VirtualBox:"
+            echo "brew reinstall virtualbox"
+            return 1
+        fi
     fi
+
+    # Test VBoxManage
+    if ! VBoxManage --version >/dev/null 2>&1; then
+        echo "VirtualBox is not functioning properly. Please check your installation."
+        return 1
+    fi
+
+    return 0
 }
 
 # Main testing function

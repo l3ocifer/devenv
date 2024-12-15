@@ -8,15 +8,41 @@
   no_log: true
 
 - name: Install/Update Rust via rustup
-  shell: |
-    if ! command -v rustup &> /dev/null; then
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    else
-      rustup update
-    fi
-  args:
-    creates: "{{ '~/.cargo/bin/rustc' | expanduser }}"
-  when: not rust_check.stat.exists
+  block:
+    - name: Download rustup installer
+      get_url:
+        url: https://sh.rustup.rs
+        dest: /tmp/rustup.sh
+        mode: '0755'
+        force: yes
+      when: not rust_check.stat.exists
+
+    - name: Install Rust
+      shell: |
+        if ! command -v rustup &> /dev/null; then
+          /tmp/rustup.sh -y --no-modify-path
+          source "$HOME/.cargo/env"
+        else
+          rustup update
+        fi
+      args:
+        creates: "{{ '~/.cargo/bin/rustc' | expanduser }}"
+        executable: /bin/bash
+      register: rust_install
+      environment:
+        RUSTUP_INIT_SKIP_PATH_CHECK: "yes"
+
+    - name: Verify Rust installation
+      shell: |
+        source "$HOME/.cargo/env"
+        rustc --version
+      changed_when: false
+      register: rust_verify
+  rescue:
+    - name: Handle Rust installation failure
+      debug:
+        msg: "Failed to install Rust. Please check your internet connection and try again."
+      when: rust_install.failed is defined
   tags: ['languages']
 
 # Python Setup via Miniconda

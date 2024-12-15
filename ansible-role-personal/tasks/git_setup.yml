@@ -1,6 +1,6 @@
 ---
 # Directory setup
-- name: Ensure Git directories exist
+- name: Create Git directories
   file:
     path: "{{ item | expanduser }}"
     state: directory
@@ -10,8 +10,6 @@
     - "{{ devenv_dir }}"
     - "~/.config/git"
     - "~/.config/git/includes"
-  loop_control:
-    label: "{{ item | basename }}"
   tags: ['git']
 
 # Git configuration

@@ -26,13 +26,19 @@
   tags: ['mas']
 
 - name: Install Mac App Store applications
-  community.general.mas:
-    id: "{{ item.0.id }}"
-    state: present
-  loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list | zip(mas_app_check.results) | list }}"
-  when: not item.1.stat.exists
-  register: mas_installation
-  ignore_errors: true
+  block:
+    - name: Install app from MAS
+      community.general.mas:
+        id: "{{ item.0.id }}"
+        state: present
+      loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list | zip(mas_app_check.results) | list }}"
+      when: not item.1.stat.exists
+      register: mas_installation
+  rescue:
+    - name: Handle MAS installation failure
+      debug:
+        msg: "Failed to install {{ item.item.0.name }}. Please ensure you're signed into the App Store."
+      when: mas_installation.failed is defined
   tags: ['mas']
 
 - name: Display Mac App Store status
@@ -152,15 +158,13 @@
   loop: "{{ config_symlinks | map(attribute='dest') | map('expanduser') | list }}"
   tags: ['config']
 
-- name: Create symlinks for application configs
+- name: Create application config symlinks
   ansible.builtin.file:
     src: "{{ item.src | expanduser }}"
     dest: "{{ item.dest | expanduser }}"
     state: link
     force: true
   loop: "{{ config_symlinks }}"
-  loop_control:
-    label: "{{ item.dest | basename }}"
   tags: ['config']
 
 # CLI Tools Installation

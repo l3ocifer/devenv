@@ -14,22 +14,22 @@ secrets_file: "~/.config/personal/secrets.yml"
 # Configuration files with their source and destination paths
 config_files:
   # Core configs
-  - { src: "{{ devenv_dir }}/dotfiles/inputrc", dest: "~/.inputrc", required: true }
-  - { src: "{{ devenv_dir }}/dotfiles/zshrc", dest: "~/.zshrc", required: true, template: "zshrc.j2" }
-  - { src: "{{ devenv_dir }}/dotfiles/gitconfig", dest: "~/.gitconfig", required: true, template: "gitconfig-client.j2" }
-  - { src: "{{ devenv_dir }}/dotfiles/gitconfig-provisions", dest: "~/.gitconfig-provisions", required: true }
+  - { src: "{{ devenv_dir }}/config/inputrc", dest: "~/.inputrc", required: true }
+  - { src: "{{ devenv_dir }}/config/zshrc", dest: "~/.zshrc", required: true, template: "zshrc.j2" }
+  - { src: "{{ devenv_dir }}/config/gitconfig", dest: "~/.gitconfig", required: true, template: "gitconfig-client.j2" }
+  - { src: "{{ devenv_dir }}/config/gitconfig-provisions", dest: "~/.gitconfig-provisions", required: true }
   # Shell configs
-  - { src: "{{ devenv_dir }}/dotfiles/zsh/aliases", dest: "~/.config/zsh/aliases", required: true, template: "aliases.j2" }
-  - { src: "{{ devenv_dir }}/dotfiles/zsh/exports", dest: "~/.config/zsh/exports", required: true, template: "exports.j2" }
+  - { src: "{{ devenv_dir }}/config/zsh/aliases", dest: "~/.config/personal/zsh/aliases", required: true, template: "aliases.j2" }
+  - { src: "{{ devenv_dir }}/config/zsh/exports", dest: "~/.config/personal/zsh/exports", required: true, template: "exports.j2" }
   # Git configs
-  - { src: "{{ devenv_dir }}/dotfiles/git/config", dest: "~/.config/git/config", required: true, template: "gitconfig-client.j2" }
+  - { src: "{{ devenv_dir }}/config/git/config", dest: "~/.config/personal/git/config", required: true, template: "gitconfig-client.j2" }
   # SSH configs
-  - { src: "{{ devenv_dir }}/dotfiles/ssh/config", dest: "~/.ssh/config", required: true, template: "ssh_config.j2" }
+  - { src: "{{ devenv_dir }}/config/ssh/config", dest: "~/.config/personal/ssh/config", required: true, template: "ssh_config.j2" }
   # Application configs
-  - { src: "{{ devenv_dir }}/dotfiles/cursor/settings.json", dest: "~/.config/cursor/settings.json", required: false }
-  - { src: "{{ devenv_dir }}/dotfiles/zed/settings.json", dest: "~/.config/zed/settings.json", required: false }
-  - { src: "{{ devenv_dir }}/dotfiles/pulsar/config.cson", dest: "~/.config/pulsar/config.cson", required: false }
-  - { src: "{{ devenv_dir }}/dotfiles/logseq/config.edn", dest: "~/.config/logseq/config.edn", required: false }
+  - { src: "{{ devenv_dir }}/config/cursor/settings.json", dest: "~/.config/personal/cursor/settings.json", required: false }
+  - { src: "{{ devenv_dir }}/config/zed/settings.json", dest: "~/.config/personal/zed/settings.json", required: false }
+  - { src: "{{ devenv_dir }}/config/pulsar/config.cson", dest: "~/.config/personal/pulsar/config.cson", required: false }
+  - { src: "{{ devenv_dir }}/config/logseq/config.edn", dest: "~/.config/personal/logseq/config.edn", required: false }
 
 # Repository configurations
 repositories:
@@ -48,14 +48,14 @@ ssh_keys: []
 config_symlinks:
   - src: "~/.config/personal/cursor/settings.json"
     dest: "~/Library/Application Support/Cursor/User/settings.json"
-  - src: "~/.config/personal/zed/settings/settings.json"
-    dest: "~/Library/Application Support/Zed/settings/settings.json"
-  - src: "~/.config/personal/windsurf/config/settings.json"
-    dest: "~/Library/Application Support/Windsurf/config/settings.json"
+  - src: "~/.config/personal/zed/settings.json"
+    dest: "~/Library/Application Support/Zed/settings.json"
   - src: "~/.config/personal/pulsar/config.cson"
     dest: "~/.pulsar/config.cson"
   - src: "~/.config/personal/logseq/config.edn"
     dest: "~/.logseq/config.edn"
+  - src: "~/.config/personal/windsurf/config/settings.json"
+    dest: "~/Library/Application Support/Windsurf/config/settings.json"
 
 # Mac App Store applications
 macos_mas_apps:
@@ -158,7 +158,10 @@ cli_tools:
 
 # Syncthing Configuration
 syncthing_device_id: "{{ ansible_hostname }}_{{ ansible_date_time.epoch }}"
-syncthing_secrets_folder_id: "secrets"
+syncthing_secrets_folder_id: "personal"
+syncthing_scripts_folder_id: "scripts"
+syncthing_ssh_folder_id: "ssh"
+syncthing_git_folder_id: "git"
 syncthing_api_key: "{{ app_secrets.syncthing.api_key }}"
 
 # Zsh Configuration

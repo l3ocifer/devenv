@@ -13,16 +13,16 @@ if [ "$BRANCH" = "main" ]; then
 
     # Update symlinks for changed files
     for file in $CHANGED_FILES; do
-        # Get the full path of the file in the dotfiles repo
-        DOTFILE_PATH="$HOME/dotfiles/$file"
+        # Get the full path of the file in the config repo
+        CONFIG_PATH="$HOME/.config/personal/$file"
         
         # Get the target path in the home directory
         TARGET_PATH="$HOME/$file"
         
-        # If the file exists in dotfiles and has a corresponding symlink
-        if [ -f "$DOTFILE_PATH" ] && [ -L "$TARGET_PATH" ]; then
+        # If the file exists in config and has a corresponding symlink
+        if [ -f "$CONFIG_PATH" ] && [ -L "$TARGET_PATH" ]; then
             # Force update the symlink
-            ln -sf "$DOTFILE_PATH" "$TARGET_PATH"
+            ln -sf "$CONFIG_PATH" "$TARGET_PATH"
             echo "Updated symlink for $file"
         fi
     done

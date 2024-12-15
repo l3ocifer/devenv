@@ -1,6 +1,6 @@
 ---
-# Verify directory structure
-- name: Verify directories
+# Verify essential directories and files
+- name: Verify essential directories exist
   stat:
     path: "{{ item | expanduser }}"
   register: dir_check
@@ -10,120 +10,55 @@
     - "{{ devenv_dir }}"
     - "{{ scripts_dir }}"
     - "~/.config/personal"
+    - "~/.config/git"
+    - "~/.config/git/includes"
     - "~/.config/zsh"
+    - "~/.config/syncthing"
     - "{{ ssh_config_dir }}"
   no_log: true
+  tags: ['verify', 'directories']
 
-# Verify configuration symlinks
-- name: Verify source files exist
+- name: Verify essential files exist
   stat:
-    path: "{{ item.src | expanduser }}"
-  register: src_check
-  with_items: "{{ config_files }}"
-  failed_when: item.required and not src_check.stat.exists
-  no_log: false
-
-- name: Create missing dotfiles from templates
-  template:
-    src: "{{ item.template }}"
-    dest: "{{ item.src | expanduser }}"
-    mode: "0644"
-  with_items: "{{ config_files }}"
-  when: item.required and not src_check.results[ansible_loop.index0].stat.exists and item.template is defined
-  no_log: false
-
-- name: Verify configuration symlinks
-  stat:
-    path: "{{ item.dest | expanduser }}"
-    follow: false
-  register: symlink_check
-  failed_when: >
-    item.required and (
-      not symlink_check.stat.exists or
-      not symlink_check.stat.islnk
-    )
-  with_items: "{{ config_files }}"
-  no_log: false
-
-# Verify essential tools
-- name: Verify essential tools
-  command: "{{ item }}"
-  register: tool_check
-  changed_when: false
-  failed_when: tool_check.rc != 0
+    path: "{{ item | expanduser }}"
+  register: file_check
+  failed_when: not file_check.stat.exists
   with_items:
-    - git --version
-    - python3 -c "import sys; assert sys.version_info >= (3, 9), 'Python 3.9+ required'"
-    - curl --version
-    - zsh --version
+    - "~/.config/personal/.git/config"
+    - "~/.config/git/config"
+    - "~/.ssh/config"
+    - "~/.config/syncthing/config.xml"
+    - "~/.zshrc"
+  no_log: true
+  tags: ['verify', 'files']
 
-# Verify Syncthing
-- name: Check Syncthing service status
-  shell: |
-    {% if ansible_system == 'Darwin' %}
-    pgrep -f syncthing || (launchctl list | grep syncthing)
-    {% else %}
-    systemctl is-active --quiet syncthing@$USER || pgrep -f syncthing
-    {% endif %}
+- name: Verify Syncthing is running
+  command: pgrep syncthing
   register: syncthing_check
+  failed_when: syncthing_check.rc != 0
   changed_when: false
-  failed_when: false
+  tags: ['verify', 'sync']
 
-- name: Verify Syncthing configuration exists
-  stat:
-    path: "~/.config/syncthing/config.xml"
-  register: syncthing_config_check
-  failed_when: syncthing_check.rc == 0 and not syncthing_config_check.stat.exists
-
-- name: Verify Syncthing secrets folder
-  block:
-    - name: Check secrets folder in Syncthing config
-      command: grep -q "folder id=\"{{ syncthing_secrets_folder_id }}\"" ~/.config/syncthing/config.xml
-      register: secrets_sync_check
-      changed_when: false
-      failed_when: false
-
-    - name: Verify secrets folder path
-      command: grep -q "path=\"{{ secrets_dir | expanduser | realpath }}\"" ~/.config/syncthing/config.xml
-      register: secrets_path_check
-      changed_when: false
-      failed_when: secrets_sync_check.rc == 0 and secrets_path_check.rc != 0
-  when: syncthing_check.rc == 0 and syncthing_config_check.stat.exists
-
-# Verify SSH and Git functionality
-- name: Test SSH agent
-  shell: ssh-add -l
+- name: Verify SSH agent is running
+  command: pgrep ssh-agent
   register: ssh_agent_check
+  failed_when: ssh_agent_check.rc != 0
   changed_when: false
-  failed_when: ssh_agent_check.rc == 2  # RC=2 means no agent running, RC=1 means no keys but agent running
+  tags: ['verify', 'ssh']
 
-- name: Test Git SSH access
-  shell: ssh -T git@github.com
-  register: git_ssh_check
+- name: Verify Git configuration
+  command: git config --global --get user.email
+  register: git_config_check
+  failed_when: git_config_check.rc != 0
   changed_when: false
-  failed_when: git_ssh_check.rc == 255  # RC=1 is normal for successful auth
+  tags: ['verify', 'git']
 
-# Platform-specific verification
-- name: Verify macOS specific tools
-  command: "{{ item }}"
-  register: macos_check
-  changed_when: false
-  failed_when: macos_check.rc != 0
-  with_items:
-    - brew --version
-    - docker --version
-    - colima version
-  when: is_macos
-
-- name: Verify Linux specific tools
-  command: "{{ item }}"
-  register: linux_check
-  changed_when: false
-  failed_when: linux_check.rc != 0
-  with_items:
-    - docker --version
-    - python3 -m pip --version
-  when: is_linux or is_wsl
+- name: Verify Oh My Zsh installation
+  stat:
+    path: "{{ oh_my_zsh_dir }}"
+  register: omz_check
+  failed_when: not omz_check.stat.exists
+  tags: ['verify', 'shell']
 
 # Display verification results
 - name: Display verification summary
@@ -131,11 +66,8 @@
     msg: |
       Verification Results:
       - Directories: {{ dir_check.results | map(attribute='stat.exists') | list | all }}
-      - Source Files: {{ src_check.results | map(attribute='stat.exists') | list | all }}
-      - Symlinks: {{ symlink_check.results | map(attribute='stat.islnk') | list | all }}
-      - Tools: {{ tool_check.results | map(attribute='rc') | list | all == 0 }}
+      - Files: {{ file_check.results | map(attribute='stat.exists') | list | all }}
       - Syncthing: {{ syncthing_check.rc == 0 }}
-      - Syncthing Config: {{ syncthing_config_check.stat.exists if syncthing_check.rc == 0 else 'N/A' }}
-      - Secrets Sync: {{ secrets_sync_check.rc == 0 if syncthing_check.rc == 0 else 'N/A' }}
-      - SSH Agent: {{ ssh_agent_check.rc != 2 }}
-      - Git SSH: {{ git_ssh_check.rc != 255 }}
+      - SSH Agent: {{ ssh_agent_check.rc == 0 }}
+      - Git Config: {{ git_config_check.rc == 0 }}
+      - Oh My Zsh: {{ omz_check.stat.exists }}

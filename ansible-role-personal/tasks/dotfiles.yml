@@ -1,59 +1,77 @@
 ---
-- name: Check if dotfiles directory exists
-  stat:
-    path: "{{ '~/dotfiles' | expanduser }}"
-  register: dotfiles_stat
-  no_log: true
-  tags: ['dotfiles']
-
-- name: Ensure dotfiles directory exists
+- name: Create dotfiles directory
   file:
-    path: "{{ '~/dotfiles' | expanduser }}"
+    path: "{{ '~/.config/personal' | expanduser }}"
     state: directory
     mode: '0755'
-  when: not dotfiles_stat.stat.exists
+  tags: ['dotfiles']
+
+- name: Create dotfiles subdirectories
+  file:
+    path: "{{ '~/.config/personal' | expanduser }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "zsh"
+    - "cursor"
+    - "zed"
+    - "pulsar"
+    - "logseq"
   tags: ['dotfiles']
 
 - name: Check if dotfiles git repo exists
   stat:
-    path: "{{ '~/dotfiles/.git' | expanduser }}"
+    path: "{{ '~/.config/personal/.git' | expanduser }}"
   register: dotfiles_git_stat
-  no_log: true
   tags: ['dotfiles']
 
-- name: Initialize dotfiles git repository if not exists
+- name: Initialize git repo for dotfiles
   command: git init
   args:
-    chdir: "{{ '~/dotfiles' | expanduser }}"
+    chdir: "{{ '~/.config/personal' | expanduser }}"
   when: not dotfiles_git_stat.stat.exists
   tags: ['dotfiles']
 
-- name: Configure dotfiles remote
+- name: Add remote for dotfiles
   command: git remote add origin {{ dotfiles_repo }}
   args:
-    chdir: "{{ '~/dotfiles' | expanduser }}"
+    chdir: "{{ '~/.config/personal' | expanduser }}"
   register: add_remote
   failed_when: add_remote.rc != 0 and "remote origin already exists" not in add_remote.stderr
   changed_when: add_remote.rc == 0
   tags: ['dotfiles']
 
-- name: Ensure config directories exist
+- name: Create dotfiles from templates
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest | expanduser }}"
+    mode: '0644'
+  loop: "{{ config_files | selectattr('template', 'defined') | list }}"
+  when: item.required | default(false)
+  tags: ['dotfiles']
+
+- name: Create dotfiles from source
+  copy:
+    src: "{{ item.src | expanduser }}"
+    dest: "{{ item.dest | expanduser }}"
+    mode: '0644'
+  loop: "{{ config_files | rejectattr('template', 'defined') | list }}"
+  when: item.required | default(false)
+  tags: ['dotfiles']
+
+- name: Create symlinks for dotfiles
   file:
-    path: "{{ '~/' | expanduser }}{{ item }}"
-    state: directory
-    mode: '0755'
-  with_items:
-    - ".config/zsh"
-    - ".config/git"
-    - ".config/cursor"
-    - ".config/zed"
-    - ".config/pulsar"
-    - ".config/logseq"
+    src: "{{ item.src | expanduser }}"
+    dest: "{{ item.dest | expanduser }}"
+    state: link
+    force: true
+  loop: "{{ config_files }}"
+  when: item.required | default(false)
   tags: ['dotfiles']
 
 - name: Check existing dotfiles
   stat:
-    path: "{{ '~/dotfiles' | expanduser }}/{{ item.dest }}"
+    path: "{{ '~/.config/personal' | expanduser }}/{{ item.dest }}"
   register: "existing_dotfiles"
   with_items:
     # Core configs
@@ -81,7 +99,7 @@
 - name: Copy dotfiles
   template:
     src: "{{ item.item.src }}"
-    dest: "{{ '~/dotfiles' | expanduser }}/{{ item.item.dest }}"
+    dest: "{{ '~/.config/personal' | expanduser }}/{{ item.item.dest }}"
     mode: '0644'
     backup: yes
     force: no
@@ -89,25 +107,15 @@
   loop: "{{ existing_dotfiles.results }}"
   tags: ['dotfiles']
 
-- name: Create configuration symlinks
-  file:
-    src: "{{ item.src | expanduser }}"
-    dest: "{{ item.dest | expanduser }}"
-    state: link
-    force: yes
-  with_items: "{{ config_files }}"
-  when: item.required
-  tags: ['dotfiles']
-
 - name: Check git hooks directory
   stat:
-    path: "{{ '~/dotfiles/.git/hooks' | expanduser }}"
+    path: "{{ '~/.config/personal/.git/hooks' | expanduser }}"
   register: hooks_stat
   tags: ['dotfiles']
 
 - name: Create git hooks directory
   file:
-    path: "{{ '~/dotfiles/.git/hooks' | expanduser }}"
+    path: "{{ '~/.config/personal/.git/hooks' | expanduser }}"
     state: directory
     mode: '0755'
   when: not hooks_stat.stat.exists
@@ -115,14 +123,14 @@
 
 - name: Check post-commit hook
   stat:
-    path: "{{ '~/dotfiles/.git/hooks/post-commit' | expanduser }}"
+    path: "{{ '~/.config/personal/.git/hooks/post-commit' | expanduser }}"
   register: post_commit_stat
   tags: ['dotfiles']
 
 - name: Install post-commit hook
   template:
     src: post-commit.j2
-    dest: "{{ '~/dotfiles/.git/hooks/post-commit' | expanduser }}"
+    dest: "{{ '~/.config/personal/.git/hooks/post-commit' | expanduser }}"
     mode: '0755'
     backup: yes
     force: no
@@ -131,7 +139,7 @@
 
 - name: Configure git for dotfiles
   blockinfile:
-    path: "{{ '~/dotfiles/.git/config' | expanduser }}"
+    path: "{{ '~/.config/personal/.git/config' | expanduser }}"
     block: |
       [core]
         autocrlf = input
@@ -150,5 +158,5 @@
       git commit -m "Initial dotfiles setup"
     fi
   args:
-    chdir: "{{ '~/dotfiles' | expanduser }}"
+    chdir: "{{ '~/.config/personal' | expanduser }}"
   tags: ['dotfiles']
