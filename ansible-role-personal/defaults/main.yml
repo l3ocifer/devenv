@@ -153,6 +153,12 @@ cli_dev_tools:
     macos_only: true
   - name: "podman"
 
+# Python Tools
+python_tools:
+  - thefuck
+  - aichat
+  - sherlock
+
 # Shell Tools
 shell_tools:
   - thefuck

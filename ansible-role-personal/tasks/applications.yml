@@ -1,4 +1,3 @@
-
 ---
 # Ensure Homebrew is up to date
 - name: Update Homebrew
@@ -353,17 +352,39 @@
   become: true
   tags: ['wsl']
 
-# Python tools
-- name: Install Python tools
+# Python Tools
+- name: Install pipx on Linux
+  package:
+    name: pipx
+    state: present
+  become: true
+  when: is_linux
+  tags: ['python']
+
+- name: Ensure pipx path exists
+  ansible.builtin.file:
+    path: "~/.local/bin"
+    state: directory
+    mode: '0755'
+  when: is_linux
+  tags: ['python']
+
+- name: Install Python tools via pipx (Linux)
+  shell: "pipx install {{ item }}"
+  loop: "{{ python_tools }}"
+  register: pipx_install
+  when: is_linux
+  changed_when: "'installed package' in pipx_install.stderr or 'installed package' in pipx_install.stdout"
+  failed_when: false
+  tags: ['python']
+
+- name: Install Python tools via pip (macOS)
   pip:
     name: "{{ item }}"
     state: present
     extra_args: --user
-  with_items:
-    - thefuck
-    - aichat  # AI chat client for CLI
-    - sherlock
-  when: not is_macos  # On macOS, these are installed via Homebrew
+  loop: "{{ python_tools }}"
+  when: is_macos
   tags: ['python']
 
 # Shell tools for non-MacOS
