@@ -118,9 +118,8 @@ desktop_apps:
     url: "https://wisprflow.com"
     wsl_compatible: false
 
-# Linux repositories
-linux_repositories:
-  - ppa:brave-browser/brave-browser
+# Linux repositories (PPAs and other sources)
+linux_repositories: []
 
 # Linux Applications
 linux_apps:
