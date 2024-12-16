@@ -1,3 +1,4 @@
+
 ---
 # Ensure Homebrew is up to date
 - name: Update Homebrew
@@ -143,7 +144,7 @@
 
 # CLI Development Tools
 - name: Get list of installed CLI tools
-  ansible.builtin.command: "command -v {{ item.name }}"
+  shell: "which {{ item.name }}"
   loop: "{{ cli_dev_tools }}"
   register: cli_check
   changed_when: false
@@ -157,7 +158,10 @@
     state: present
   become: true
   loop: "{{ cli_check.results }}"
-  when: item.rc != 0 and is_linux
+  when: 
+    - item.rc != 0 
+    - is_linux
+    - not item.item.macos_only | default(false)
   register: cli_install_linux
   tags: ['apps']
 
@@ -170,7 +174,7 @@
   register: cli_install_macos
   tags: ['apps']
 
-- name: Display CLI tool status
+- name: Display CLI tool status (Linux)
   ansible.builtin.debug:
     msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
   loop: "{{ cli_install_linux.results }}"
@@ -179,7 +183,7 @@
   when: is_linux
   tags: ['apps']
 
-- name: Display CLI tool status
+- name: Display CLI tool status (macOS)
   ansible.builtin.debug:
     msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
   loop: "{{ cli_install_macos.results }}"

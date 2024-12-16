@@ -150,6 +150,7 @@ linux_apps:
 # CLI Development Tools
 cli_dev_tools:
   - name: "colima"
+    macos_only: true
   - name: "podman"
 
 # Shell Tools
