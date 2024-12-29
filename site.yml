@@ -1,0 +1,19 @@
+---
+# Main playbook that includes all other playbooks
+- name: Apply common configuration to all nodes
+  hosts: all
+  roles:
+    - common  # Will be created later for common tasks
+
+- name: Configure development environment
+  hosts: development
+  roles:
+    - devenv  # Our renamed personal development environment role
+
+# Example of how additional roles can be added:
+# - name: Configure home server services
+#   hosts: homeserver
+#   roles:
+#     - mediaserver
+#     - homeassistant
+#     - monitoring

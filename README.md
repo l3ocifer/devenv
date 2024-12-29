@@ -1,6 +1,47 @@
-# Development Environment Setup
+# Home Infrastructure as Code
 
-Automated development environment setup for macOS, Linux, and WSL. This repository contains Ansible roles and scripts to configure a consistent development environment across different platforms.
+This repository contains Ansible roles and playbooks for managing personal development environment and home infrastructure services.
+
+## Repository Structure
+
+```
+.
+├── inventory/          # Inventory files
+│   └── hosts.yml      # Main inventory file
+├── group_vars/        # Variables for groups of hosts
+├── host_vars/         # Host-specific variables
+├── playbooks/         # Task playbooks for specific purposes
+├── roles/             # All roles live here
+│   ├── devenv/        # Development environment setup role
+│   └── ... (other roles)
+└── site.yml           # Main playbook that ties everything together
+```
+
+## Available Roles
+
+- `devenv`: Sets up a development environment with necessary tools and configurations
+- (Add new roles here as they are created)
+
+## Adding New Roles
+
+To create a new role:
+
+1. Create a new directory under `roles/`:
+   ```bash
+   ansible-galaxy init roles/new-role-name
+   ```
+
+2. Add your role to the appropriate playbook in `site.yml`
+
+3. Update inventory and group variables as needed
+
+## Usage
+
+1. Copy `secrets.yml.example` to `secrets.yml` and fill in your values
+2. Run the main playbook:
+   ```bash
+   ansible-playbook -i inventory/hosts.yml site.yml
+   ```
 
 ## Prerequisites
 
