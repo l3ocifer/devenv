@@ -1,0 +1,39 @@
+---
+# AWS Test Runner Configuration
+
+# AWS Configuration
+aws_region: "us-east-1"
+aws_profile: "default"
+aws_vpc_cidr: "10.0.0.0/16"
+aws_subnet_cidr: "10.0.1.0/24"
+
+# Instance Configuration
+instance_type_map:
+  "small":  # < 2GB RAM
+    type: "t3.micro"
+    ram_gb: 1
+  "medium":  # 2-4GB RAM
+    type: "t3.small"
+    ram_gb: 2
+  "large":  # 4-8GB RAM
+    type: "t3.medium"
+    ram_gb: 4
+  "xlarge":  # 8-16GB RAM
+    type: "t3.large"
+    ram_gb: 8
+  "2xlarge":  # 16-32GB RAM
+    type: "t3.xlarge"
+    ram_gb: 16
+  "4xlarge":  # 32GB+ RAM
+    type: "t3.2xlarge"
+    ram_gb: 32
+
+# Test Configuration
+test_timeout_minutes: 30
+cleanup_on_success: true
+cleanup_on_failure: false  # Keep instance for debugging
+parallel_tests: 1  # Number of simultaneous test instances
+
+# Verification
+verification_retries: 3
+verification_delay: 30  # seconds between retries

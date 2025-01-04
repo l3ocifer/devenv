@@ -1,0 +1,97 @@
+---
+- name: Get local system specifications
+  ansible.builtin.setup:
+    gather_subset:
+      - hardware
+  register: local_specs
+
+- name: Calculate required instance type
+  ansible.builtin.set_fact:
+    required_ram_gb: "{{ (local_specs.ansible_facts.ansible_memtotal_mb / 1024) | round | int }}"
+    required_cpu: "{{ local_specs.ansible_facts.ansible_processor_vcpus }}"
+
+- name: Determine AWS instance type
+  ansible.builtin.set_fact:
+    selected_instance: >-
+      {{
+        instance_type_map | dict2items |
+        selectattr('value.ram_gb', 'ge', required_ram_gb) |
+        sort(attribute='value.ram_gb') |
+        first
+      }}
+
+- name: Create AWS VPC for testing
+  amazon.aws.ec2_vpc_net:
+    name: "homelab-test-vpc-{{ ansible_date_time.epoch }}"
+    cidr_block: "{{ aws_vpc_cidr }}"
+    region: "{{ aws_region }}"
+    tags:
+      Environment: test
+      AutoRemove: "yes"
+  register: test_vpc
+
+- name: Create subnet
+  amazon.aws.ec2_vpc_subnet:
+    vpc_id: "{{ test_vpc.vpc.id }}"
+    cidr: "{{ aws_subnet_cidr }}"
+    region: "{{ aws_region }}"
+    tags:
+      Name: "homelab-test-subnet"
+      AutoRemove: "yes"
+  register: test_subnet
+
+- name: Create security group
+  amazon.aws.ec2_security_group:
+    name: "homelab-test-sg-{{ ansible_date_time.epoch }}"
+    description: "Security group for homelab testing"
+    vpc_id: "{{ test_vpc.vpc.id }}"
+    region: "{{ aws_region }}"
+    rules:
+      - proto: tcp
+        ports: 22
+        cidr_ip: "{{ ansible_default_ipv4.address }}/32"
+  register: test_sg
+
+- name: Launch test instance
+  amazon.aws.ec2_instance:
+    name: "homelab-test-{{ ansible_date_time.epoch }}"
+    instance_type: "{{ selected_instance.value.type }}"
+    security_group: "{{ test_sg.group_id }}"
+    vpc_subnet_id: "{{ test_subnet.subnet.id }}"
+    region: "{{ aws_region }}"
+    wait: yes
+    tags:
+      Name: "homelab-test"
+      AutoRemove: "yes"
+  register: test_instance
+
+- name: Add instance to inventory
+  ansible.builtin.add_host:
+    name: "{{ test_instance.instances[0].public_ip_address }}"
+    group: test_instances
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: "{{ playbook_dir }}/aws_test_key.pem"
+
+- name: Wait for SSH
+  ansible.builtin.wait_for:
+    host: "{{ test_instance.instances[0].public_ip_address }}"
+    port: 22
+    timeout: 300
+
+- name: Run role tests
+  ansible.builtin.include_role:
+    name: "{{ item }}"
+  loop: "{{ roles_to_test }}"
+  delegate_to: "{{ test_instance.instances[0].public_ip_address }}"
+
+- name: Verify role deployment
+  ansible.builtin.include_tasks: verify.yml
+  loop: "{{ roles_to_test }}"
+  retries: "{{ verification_retries }}"
+  delay: "{{ verification_delay }}"
+  register: verification_result
+  until: verification_result is success
+
+- name: Cleanup AWS resources
+  ansible.builtin.include_tasks: cleanup.yml
+  when: cleanup_on_success or (not verification_result is success and cleanup_on_failure)

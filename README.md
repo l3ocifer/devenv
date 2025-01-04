@@ -1,194 +1,184 @@
-# Home Infrastructure as Code
+# Homelab DevEnv
 
-This repository contains Ansible roles and playbooks for managing personal development environment and home infrastructure services.
+A comprehensive Ansible-based homelab setup with automated role generation, verification, and deployment capabilities.
 
-## Repository Structure
+## Architecture
 
-```
-.
-├── inventory/          # Inventory files
-│   └── hosts.yml      # Main inventory file
-├── group_vars/        # Variables for groups of hosts
-├── host_vars/         # Host-specific variables
-├── playbooks/         # Task playbooks for specific purposes
-├── roles/             # All roles live here
-│   ├── devenv/        # Development environment setup role
-│   └── ... (other roles)
-└── site.yml           # Main playbook that ties everything together
-```
+### Core Components
 
-## Available Roles
+- **Infrastructure Roles**: Network, security, and core services
+- **Monitoring Stack**: Prometheus, Grafana, Loki for comprehensive monitoring
+- **Storage Solutions**: Syncthing, Restic for data management
+- **Security Layer**: Fail2ban, UFW, custom iptables configuration
+- **Development Tools**: Rustdesk, Rustpad, Coolify
+- **AI Services**: Librechat, Ollama, Mistral.rs (High-resource nodes only)
 
-- `devenv`: Sets up a development environment with necessary tools and configurations
-- (Add new roles here as they are created)
+### Resource Tiers
 
-## Adding New Roles
+#### High Resource Node (Desktop Server)
+- **Hardware**: 55GB RAM, Multiple TB Storage
+- **Services**:
+  - AI Services (Ollama, Librechat)
+  - Primary Monitoring Stack
+  - Video Conferencing (Jitsi)
+  - Primary DNS Controller
 
-To create a new role:
+#### Raspberry Pi Cluster (30 nodes)
+- **Hardware per Node**: 1GB RAM, 16-64GB Storage
+- **Distributed Services**:
+  - DNS Servers (5 nodes)
+  - Monitoring Collectors (5 nodes)
+  - Storage Nodes (4 nodes)
+  - Edge Nodes (3 nodes)
+  - General Purpose/Failover (13 nodes)
 
-1. Create a new directory under `roles/`:
-   ```bash
-   ansible-galaxy init roles/new-role-name
-   ```
+### AWS Integration
 
-2. Add your role to the appropriate playbook in `site.yml`
+The homelab integrates with AWS Route53 for domain management:
+- Primary zone controller on main server
+- Secondary DNS servers on edge nodes
+- Support for multiple Route53 zones across accounts
+- Automated DNS updates via AWS API
 
-3. Update inventory and group variables as needed
+### Coolify Integration
 
-## Usage
-
-1. Copy `secrets.yml.example` to `secrets.yml` and fill in your values
-2. Run the main playbook:
-   ```bash
-   ansible-playbook -i inventory/hosts.yml site.yml
-   ```
-
-## Prerequisites
-
-Before running the setup, you'll need to configure your secrets file:
-
-1. Copy the example secrets file:
-```bash
-mkdir -p ~/.config/personal
-cp secrets.yml.example ~/.config/personal/secrets.yml
-```
-
-2. Edit the secrets file with your information:
-```bash
-# Use your preferred editor
-vim ~/.config/personal/secrets.yml
-```
-
-Required configurations in secrets.yml:
-- Git user information
-- SSH keys
-- API tokens (if using GitHub, OpenAI, etc.)
-- AWS credentials (if using AWS)
+Coolify serves as the primary deployment and management platform:
+- Centralized dashboard for all services
+- Automated deployments
+- Resource monitoring
+- SSL certificate management
 
 ## Quick Start
 
-```bash
-# One-line install
-curl -fsSL https://raw.githubusercontent.com/l3ocifer/devenv/main/setup.sh | bash
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/devenv.git
+   cd devenv
+   ```
+
+2. Install dependencies:
+   ```bash
+   ansible-galaxy install -r requirements.yml
+   ```
+
+3. Configure your inventory in `inventory/`:
+   ```yaml
+   all:
+     children:
+       high_resource:
+         hosts:
+           alef:
+             ansible_host: 192.168.1.10
+       medium_resource:
+         hosts:
+           bet:
+             ansible_host: 192.168.1.11
+       low_resource:
+         hosts:
+           gimel:
+             ansible_host: 192.168.1.12
+   ```
+
+4. Run the playbook:
+   ```bash
+   ansible-playbook site.yml
+   ```
+
+## Role Management
+
+### Role Structure
+```
+roles/
+├── service-template/          # Base template for all roles
+│   ├── defaults/
+│   │   └── main.yml         # Default variables
+│   ├── handlers/
+│   │   └── main.yml         # Service handlers
+│   ├── tasks/
+│   │   └── main.yml         # Tasks with integrated verification
+│   └── templates/
+│       └── config.yml.j2    # Service configuration template
+└── [service_name]/           # Generated service roles
 ```
 
-Or manually:
+### Creating New Roles
 
-```bash
-# Clone the repository
-git clone https://github.com/l3ocifer/devenv.git ~/git/devenv
+1. Add role definition to `scripts/generate_roles.sh`:
+   ```bash
+   ["new_service"]="service description;resource_tier;category"
+   ```
 
-# Setup secrets (if not done already)
-mkdir -p ~/.config/personal
-cp ~/git/devenv/secrets.yml.example ~/.config/personal/secrets.yml
-vim ~/.config/personal/secrets.yml  # Edit with your details
+2. Run the role generator:
+   ```bash
+   ./scripts/generate_roles.sh
+   ```
 
-# Run setup script
-cd ~/git/devenv
-./setup.sh
-```
+3. Customize the generated role:
+   - Update `defaults/main.yml` with service-specific variables
+   - Modify `tasks/main.yml` for service installation
+   - Configure `templates/config.yml.j2` for service configuration
 
-## What's Included
+### Integrated Verification
 
-### Development Tools
-- Cursor - AI-powered IDE
-- Zed - High-performance code editor
-- Pulsar - Modern text editor
-- Logseq - Knowledge management
-
-### Programming Languages
-- Python (via Miniconda)
-- Node.js
-- Rust
-- Go
-- Ruby
-- Java
-
-### DevOps Tools
-- Docker Desktop
-- Colima
-- Podman
-- AWS CLI
-- Terraform
-- kubectl
-
-### Utilities
-- Git + Configuration
-- SSH Setup
-- Shell Configuration (zsh)
-- CLI Tools (ripgrep, fd, bat, eza, etc.)
+Each role includes automated verification:
+- System requirements validation
+- Package installation checks
+- Service status verification
+- Configuration validation
+- Port and health endpoint monitoring
+- Backup configuration verification
 
 ## Configuration
 
-### Secrets Management
-The `~/.config/personal/secrets.yml` file contains your personal configurations:
-```yaml
-# Example structure (see secrets.yml.example for full template)
-git_user_name: "Your Name"
-git_user_email: "your.email@example.com"
-ssh_keys:
-  - name: id_rsa
-    key: |
-      -----BEGIN RSA PRIVATE KEY-----
-      Your private key here
-      -----END RSA PRIVATE KEY-----
-```
+### Group Variables
+Located in `group_vars/`:
+- `all.yml`: Global variables
+- `high_resource.yml`: High-resource node settings
+- `medium_resource.yml`: Medium-resource node settings
+- `low_resource.yml`: Low-resource node settings
 
-### Directory Structure
+### Host Variables
+Located in `host_vars/`:
+- Individual host configurations
+- Node-specific overrides
 
-```
-~/
-├── git/
-│   └── devenv/          # This repository
-└── .scripts/            # Scripts repository (https://github.com/l3ocifer/scripts)
-```
+## Best Practices
 
-## Testing
+1. **Role Development**:
+   - Always use the role generator for consistency
+   - Include comprehensive verification steps
+   - Document all variables in defaults/main.yml
+   - Test on appropriate resource tier
 
-Run the test suite to verify the setup:
-```bash
-./test.sh         # Run tests, preserve failed VMs for debugging
-./test.sh -c      # Run tests, clean up all VMs regardless of result
-```
+2. **Security**:
+   - Use vault for sensitive data
+   - Implement least privilege access
+   - Regular security role updates
+   - Maintain firewall configurations
 
-## Manual Installation
+3. **Monitoring**:
+   - Enable health checks where possible
+   - Configure appropriate resource limits
+   - Set up alerting thresholds
+   - Regular backup verification
 
-If you prefer to install specific components:
-
-```bash
-# Install only programming languages
-ansible-playbook main.yml --tags languages
-
-# Install only applications
-ansible-playbook main.yml --tags apps
-
-# Install everything
-ansible-playbook main.yml --tags all
-```
-
-## Maintenance
-
-### Updating
-```bash
-cd ~/git/devenv
-git pull
-./setup.sh
-```
-
-### Troubleshooting
-If you encounter issues:
-1. Check the ansible logs in `~/.ansible/log/`
-2. Verify your secrets.yml configuration
-3. Run setup.sh with -v flag for verbose output
+4. **Maintenance**:
+   - Regular role updates
+   - Backup verification
+   - Security patches
+   - Performance monitoring
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+3. Add/modify roles using the generator
+4. Submit a pull request
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT
+
+## Author
+
+Created for Homelab deployment

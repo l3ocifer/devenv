@@ -16,7 +16,10 @@ Thumbs.db
 
 # Ansible
 *.retry
+*.pyc
+__pycache__/
 .ansible/
+.cache/
 ansible.cfg
 
 # Python
@@ -77,6 +80,9 @@ yarn-error.log*
 .env.production
 
 # Secrets and keys
+secrets.yml
+vault.key
+**/vault.yml
 *.pem
 *.key
 *.crt
@@ -85,7 +91,6 @@ yarn-error.log*
 *.p12
 *.pfx
 *.cer
-secrets.yml
 .secrets/
 
 # Logs and databases
@@ -117,7 +122,6 @@ DerivedData/
 !default.perspectivev3
 
 # macOS system files
-.DS_Store
 .AppleDouble
 .LSOverride
 
@@ -136,3 +140,23 @@ coverage.xml
 *.tmp
 .history/
 *.patch
+
+# Generated Files
+/roles/*/files/
+/roles/*/templates/*.generated
+*.generated.*
+
+# AWS
+.aws/
+aws_test_key.pem
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Docker
+.docker/
+*.tar
+*.tar.gz
