@@ -34,19 +34,48 @@ A comprehensive Ansible-based homelab setup with automated role generation, veri
 
 ### AWS Integration
 
-The homelab integrates with AWS Route53 for domain management:
+The homelab integrates with AWS Route53 for domain management using existing AWS profiles:
+
+#### AWS Authentication
+- Uses existing AWS profiles and credentials
+- Supports multiple AWS accounts via profile switching
+- Environment variables for credentials:
+  - `AWS_PROFILE`: AWS profile name (defaults to 'default')
+  - `AWS_ACCESS_KEY_ID`: AWS access key
+  - `AWS_SECRET_ACCESS_KEY`: AWS secret key
+  - `AWS_SESSION_TOKEN`: Optional session token
+
+#### Route53 Configuration
 - Primary zone controller on main server
 - Secondary DNS servers on edge nodes
 - Support for multiple Route53 zones across accounts
 - Automated DNS updates via AWS API
 
+#### Running with Route53
+```bash
+# Example: Running playbook with Route53 zone ID
+ansible-playbook site.yml -e "route53_zone_id=Z0123456789ABCDEF"
+
+# Multiple zones example
+ansible-playbook site.yml -e '{
+  "route53_zones": {
+    "homelab.internal": "Z0123456789ABCDEF",
+    "prod.example.com": "Z9876543210FEDCBA"
+  }
+}'
+```
+
 ### Coolify Integration
 
 Coolify serves as the primary deployment and management platform:
-- Centralized dashboard for all services
-- Automated deployments
-- Resource monitoring
-- SSL certificate management
+- Environment variables required:
+  - `COOLIFY_API_KEY`: API key for Coolify access
+  - `COOLIFY_DOMAIN`: Domain where Coolify is hosted
+- Features:
+  - Centralized dashboard for all services
+  - Automated deployments
+  - Resource monitoring
+  - SSL certificate management
 
 ## Quick Start
 

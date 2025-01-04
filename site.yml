@@ -53,11 +53,17 @@
   hosts: all
   become: true
   tags: ["verify"]
+  pre_tasks:
+    - name: Run system verification
+      include_role:
+        name: verify
+      tags: ["always"]
+  
   tasks:
     - name: Include service verification
       include_role:
         name: "{{ item }}"
-        tasks_from: main.yml
+        tasks_from: verify.yml
       loop: "{{ services | default([]) }}"
       when: services is defined
       register: verification_results
@@ -65,12 +71,22 @@
 
     - name: Display verification results
       debug:
-        msg: "Service {{ item.item }} verification {{ 'succeeded' if item.role_verified else 'failed' }}"
-      loop: "{{ verification_results.results }}"
-      when: verification_results.results is defined
+        var: verification_results
+        verbosity: 1
+
+    - name: Check verification reports
+      command: "cat /var/log/homelab/verification_{{ inventory_hostname }}.log"
+      register: verification_report
+      changed_when: false
+
+    - name: Display verification report
+      debug:
+        msg: "{{ verification_report.stdout_lines }}"
 
     - name: Check overall verification status
       assert:
-        that: "verification_results.results | map(attribute='role_verified') | select | list | length == verification_results.results | length"
-        msg: "Some service verifications failed. Please check the results above."
+        that: 
+          - "verification_results.results | map(attribute='failed') | select | list | length == 0"
+          - "verification_report.rc == 0"
+        msg: "Verification failed. Please check the verification report for details."
       when: verification_results.results is defined

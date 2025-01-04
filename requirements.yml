@@ -8,6 +8,10 @@ collections:
     version: ">=1.5.4"
   - name: amazon.aws
     version: ">=6.0.0"
+  - name: community.aws
+    version: ">=6.0.0"
+  - name: amazon.route53
+    version: ">=1.0.0"
 
 roles:
   # Core Infrastructure
