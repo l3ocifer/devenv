@@ -1,0 +1,43 @@
+---
+- name: Wait for Coolify container to be healthy
+  docker_container_info:
+    name: coolify
+  register: coolify_status
+  until: 
+    - coolify_status.container.State.Running
+    - coolify_status.container.State.Health.Status == "healthy"
+  retries: "{{ verification_retries | default(10) }}"
+  delay: "{{ verification_delay | default(30) }}"
+
+- name: Verify Coolify API is responding
+  uri:
+    url: "http://localhost:3000/api/v1/status"
+    return_content: yes
+    status_code: 200
+  register: api_check
+  retries: 3
+  delay: 10
+  until: api_check.status == 200
+
+- name: Verify required ports are listening
+  wait_for:
+    port: "{{ item }}"
+    timeout: 30
+  loop:
+    - 3000  # Coolify UI
+    - 8000  # API port
+    - 27017  # MongoDB
+
+- name: Verify Docker network exists
+  command: docker network inspect coolify
+  changed_when: false
+  register: network_check
+
+- name: Output verification status
+  debug:
+    msg: |
+      Coolify Verification Results:
+      - Container Running: {{ coolify_status.container.State.Running }}
+      - Container Healthy: {{ coolify_status.container.State.Health.Status == "healthy" }}
+      - API Responding: {{ api_check.status == 200 }}
+      - Network Config: {{ network_check.rc == 0 }} 

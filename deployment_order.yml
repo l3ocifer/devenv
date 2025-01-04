@@ -59,7 +59,7 @@ phases:
 node_requirements:
   main_server:  # alef
     min_ram_gb: 32
-    min_storage_gb: 500
+    min_storage_gb: 200
     services:
       - ollama
       - mistral_rs
@@ -67,7 +67,7 @@ node_requirements:
       - matrix
       
   legion_nodes:  # Raspberry Pi cluster
-    min_ram_mb: 1024
+    min_ram_mb: 900
     min_storage_gb: 16
     max_services_per_node: 2
     suitable_services:
