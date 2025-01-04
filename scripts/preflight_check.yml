@@ -1,0 +1,61 @@
+---
+# Pre-flight checks for homelab deployment
+
+- name: Verify system requirements
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Check minimum RAM requirements
+      assert:
+        that:
+          - ansible_memtotal_mb >= 1024  # Minimum 1GB RAM
+        msg: "Insufficient RAM. Need at least 1GB, found {{ ansible_memtotal_mb }}MB"
+
+    - name: Check minimum disk space
+      assert:
+        that:
+          - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | list | first >= 16000000000  # 16GB
+        msg: "Insufficient disk space. Need at least 16GB"
+
+    - name: Check CPU architecture
+      assert:
+        that:
+          - ansible_architecture in ['x86_64', 'aarch64', 'armv7l']
+        msg: "Unsupported CPU architecture: {{ ansible_architecture }}"
+
+- name: Verify high-memory node requirements
+  hosts: high_memory_nodes
+  gather_facts: true
+  tasks:
+    - name: Check RAM for AI services
+      assert:
+        that:
+          - ansible_memtotal_mb >= 32768  # Minimum 32GB RAM for AI services
+        msg: "Insufficient RAM for AI services. Need at least 32GB"
+
+- name: Verify storage node requirements
+  hosts: storage_nodes
+  gather_facts: true
+  tasks:
+    - name: Check available storage
+      assert:
+        that:
+          - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | list | first >= 500000000000  # 500GB
+        msg: "Insufficient storage space. Need at least 500GB for media and data storage"
+
+- name: Check network connectivity
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check network reachability
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ ansible_port | default(22) }}"
+        timeout: 10
+      delegate_to: localhost
+
+    - name: Check internet connectivity
+      uri:
+        url: https://www.google.com
+        validate_certs: yes
+      delegate_to: "{{ inventory_hostname }}"

@@ -1,19 +1,77 @@
 ---
-# Main playbook that includes all other playbooks
+# Main playbook for homelab configuration
+
 - name: Apply common configuration to all nodes
   hosts: all
   roles:
-    - common  # Will be created later for common tasks
+    - common
 
 - name: Configure development environment
   hosts: development
   roles:
-    - devenv  # Our renamed personal development environment role
+    - devenv
 
-# Example of how additional roles can be added:
-# - name: Configure home server services
-#   hosts: homeserver
-#   roles:
-#     - mediaserver
-#     - homeassistant
-#     - monitoring
+# High-Resource Services (Main Server)
+- name: Configure AI services
+  hosts: high_memory_nodes
+  roles:
+    - librechat     # 2-4GB RAM
+    - ollama        # 8GB+ RAM per model
+    - mistral_rs    # 7GB+ RAM
+    - openwebui     # 1-2GB RAM
+
+- name: Configure storage-intensive services
+  hosts: storage_nodes
+  roles:
+    - kodi          # Media storage
+    - vaultwarden   # Password database
+    - syncthing     # File sync
+    - matrix        # Chat history
+    - whodb         # Database storage
+
+- name: Configure core infrastructure
+  hosts: main_server
+  roles:
+    - traefik       # Reverse proxy
+    - authelia      # Authentication
+    - prometheus    # Metrics storage
+    - grafana       # Visualization
+    - jitsi         # Video conferencing
+    - guacamole     # Remote desktop gateway
+
+# Distributed Services (Pi Cluster)
+- name: Configure DNS nodes
+  hosts: dns_nodes
+  roles:
+    - hickory_dns   # Distributed DNS
+
+- name: Configure monitoring nodes
+  hosts: monitoring_nodes
+  roles:
+    - node_exporter
+    - uptime-kuma
+
+- name: Configure automation nodes
+  hosts: automation_nodes
+  roles:
+    - home_assistant
+    - homekit_bridge
+    - diyhue
+    - huginn
+    - n8n
+
+# Development Tools (Distributed)
+- name: Configure development tools
+  hosts: legion_cluster
+  roles:
+    - rustdesk      # Remote desktop (lightweight client)
+    - rustpad       # Collaborative editor
+    - coolify       # Self-hosting platform
+    - postiz        # Documentation
+
+# Basic monitoring for all nodes
+- name: Configure other devices
+  hosts: all:!main_server
+  roles:
+    - node_exporter  # Lightweight monitoring
+    - backup_client  # Backup management
