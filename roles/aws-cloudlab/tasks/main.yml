@@ -136,6 +136,9 @@
     tags:
       Name: "{{ vpc_config.name }}-public-rt"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+    purge_routes: false
+    purge_subnets: false
+    purge_tags: false
     subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
     routes:
       - dest: "0.0.0.0/0"
@@ -149,6 +152,9 @@
     tags:
       Name: "{{ vpc_config.name }}-private-rt"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+    purge_routes: false
+    purge_subnets: false
+    purge_tags: false
     subnets: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
     routes:
       - dest: "0.0.0.0/0"
@@ -167,7 +173,7 @@
 
 - name: Launch test instances
   amazon.aws.ec2_instance:
-    name: "{{ environment_prefix }}-{{ target_env }}-{{ '%02d' | format(item | int) }}"
+    name: "{{ environment_prefix }}-{{ target_env }}"
     instance_type: "{{ selected_instance_type }}"
     region: "{{ aws_region }}"
     image_id: "{{ ami_map[target_env] }}"
@@ -176,51 +182,58 @@
     vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
     security_groups: ["{{ test_sg.group_id }}"]
     state: present
+    count: "{{ instance_count }}"
     tags:
       Name: "{{ environment_prefix }}-{{ target_env }}"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
       Environment: "{{ deployment_mode }}"
   register: test_instance
-  when: existing_instances.instances | length < instance_count
-  loop: "{{ range(existing_instances.instances | length + 1, instance_count + 1) | list | map('string') | list }}"
+  when: existing_instances.instances | length != instance_count
 
 - name: Use existing instances
   ansible.builtin.set_fact:
     test_instance:
-      results:
-        - instance_ids: "{{ existing_instances.instances | map(attribute='instance_id') | list }}"
-  when: existing_instances.instances | length >= instance_count
+      instances: "{{ existing_instances.instances }}"
+  when: existing_instances.instances | length == instance_count
 
 - name: Wait for instances to be ready
   amazon.aws.ec2_instance_info:
-    instance_ids: "{{ test_instance.results | map(attribute='instance_ids') | flatten }}"
+    instance_ids: "{{ test_instance.instances | map(attribute='instance_id') | list }}"
     region: "{{ aws_region }}"
   register: instance_status
   until: >
     instance_status.instances | length > 0 and
     instance_status.instances | map(attribute='state.name') | list | unique == ['running'] and
-    instance_status.instances | map(attribute='state.code') | list | unique == [16] and
-    (instance_status.instances | map(attribute='system_status.status') | list | unique == ['ok']) and
-    (instance_status.instances | map(attribute='instance_status.status') | list | unique == ['ok'])
+    instance_status.instances | map(attribute='state.code') | list | unique == [16]
   retries: "{{ instance_check_retries }}"
   delay: "{{ instance_check_delay }}"
   when: test_instance is changed
 
-- name: Verify SSM connectivity and internet access
+- name: Wait for SSM agent to be online
   ansible.builtin.shell: |
-    aws ssm describe-instance-information --filters "Key=InstanceIds,Values={{ item }}" --region {{ aws_region }} --output json | grep -q "{{ item }}" &&
-    aws ssm send-command \
-      --instance-ids "{{ item }}" \
-      --document-name "AWS-RunShellScript" \
-      --parameters 'commands=["apt update"]' \
+    aws ssm describe-instance-information \
+      --filters "Key=InstanceIds,Values={{ item }}" \
       --region {{ aws_region }} \
+      --query "InstanceInformationList[0].PingStatus" \
       --output text
-  register: ssm_check
-  until: ssm_check is success
+  register: ssm_status
+  until: ssm_status.stdout == "Online"
   retries: "{{ instance_check_retries }}"
   delay: "{{ instance_check_delay }}"
-  loop: "{{ (test_instance.results | map(attribute='instance_ids') | flatten | list) if test_instance.results is defined else [] }}"
+  loop: "{{ test_instance.instances | map(attribute='instance_id') | list }}"
   changed_when: false
+  when: test_instance is changed
+
+- name: Verify instance connectivity via SSM
+  ansible.builtin.shell: |
+    aws ssm start-session --target {{ item }} --document-name AWS-StartInteractiveCommand --parameters command="sudo apt update" --region {{ aws_region }}
+  register: ssm_check
+  retries: "{{ instance_check_retries }}"
+  delay: "{{ instance_check_delay }}"
+  until: ssm_check.rc == 0
+  loop: "{{ test_instance.instances | map(attribute='instance_id') | list }}"
+  changed_when: false
+  when: test_instance is changed
 
 - name: Fail if instances are not accessible via SSM
   ansible.builtin.fail:
@@ -233,7 +246,7 @@
       4. Instance system logs at /var/log/amazon/ssm/amazon-ssm-agent.log
       5. Network connectivity to SSM endpoints (ssm.{{ aws_region }}.amazonaws.com)
       6. Internet connectivity for package updates
-  when: ssm_check.failed is defined
+  when: ssm_status.failed is defined or ssm_check.failed is defined
 
 - name: Create load balancer security group
   amazon.aws.ec2_security_group:
@@ -305,7 +318,7 @@
 
 - name: Configure instance SSH settings
   amazon.aws.ec2_instance:
-    instance_ids: "{{ item }}"
+    instance_ids: "{{ test_instance.instances | map(attribute='instance_id') | list }}"
     region: "{{ aws_region }}"
     state: present
     user_data: |
@@ -317,10 +330,19 @@
       chmod 700 /home/{{ ssh_config.user }}/.ssh
       chmod 600 /home/{{ ssh_config.user }}/.ssh/authorized_keys
       echo "{{ ssh_config.user }} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/{{ ssh_config.user }}
-  loop: "{{ (test_instance.results | map(attribute='instance_ids') | flatten | list) if test_instance.results is defined else [] }}"
+  when: deployment_type | default('test') == 'prod' and test_instance.instances is defined
+
+- name: Assert instance data is valid
+  ansible.builtin.assert:
+    that:
+      - "test_instance is defined"
+      - "test_instance.instances is defined"
+      - "test_instance.instances | length > 0"
+      - "test_instance.instances | map(attribute='instance_id') | list | length > 0"
+    fail_msg: "Invalid instance data structure"
   when: deployment_type | default('test') == 'prod'
 
 - name: Wait for user setup
   pause:
     seconds: 30
-  when: deployment_type | default('test') == 'prod'
+  when: deployment_type | default('test') == 'prod' and test_instance.instances is defined
