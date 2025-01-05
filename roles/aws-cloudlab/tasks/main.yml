@@ -20,7 +20,7 @@
     required_vcpus: "{{ instance_type_map[target_env].vcpus }}"
 
 - name: Create AWS VPC for testing
-  amazon.aws.ec2_vpc_net:
+  amazon.aws.ec2_vpc:
     name: "{{ vpc_config.name }}"
     cidr_block: "{{ vpc_config.cidr }}"
     region: "{{ aws_region }}"
