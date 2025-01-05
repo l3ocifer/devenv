@@ -153,55 +153,38 @@
   delay: "{{ instance_check_delay }}"
   when: test_instance is changed
 
-- name: Check SSM instance status
-  amazon.aws.aws_ssm_info:
-    region: "{{ aws_region }}"
-    instance_information_filter:
-      - key: InstanceIds
-        values: "{{ test_instance.results | map(attribute='instance_ids') | flatten | list }}"
-  register: ssm_instance_status
-  until: ssm_instance_status.instance_information | map(attribute='PingStatus') | list | unique == ['Online']
+- name: Verify SSM connectivity and internet access
+  ansible.builtin.command: sudo apt update
+  vars:
+    ansible_connection: community.aws.aws_ssm
+    ansible_aws_ssm_region: "{{ aws_region }}"
+    ansible_aws_ssm_instance_id: "{{ item }}"
+  register: ssm_check
+  until: ssm_check is success
   retries: "{{ instance_check_retries }}"
   delay: "{{ instance_check_delay }}"
+  loop: "{{ test_instance.results | map(attribute='instance_ids') | flatten | list }}"
   when: test_instance is changed
 
-- name: Verify instance SSM configuration
-  amazon.aws.aws_ssm_info:
-    region: "{{ aws_region }}"
-    instance_information_filter:
-      - key: InstanceIds
-        values: "{{ test_instance.results | map(attribute='instance_ids') | flatten | list }}"
-      - key: PlatformTypes
-        values: ["Linux"]
-      - key: ResourceType
-        values: ["EC2Instance"]
-  register: ssm_config_status
-  until: >
-    ssm_config_status.instance_information | length > 0 and
-    ssm_config_status.instance_information | map(attribute='PingStatus') | list | unique == ['Online'] and
-    ssm_config_status.instance_information | map(attribute='AssociationStatus') | list | unique == ['Success']
-  retries: "{{ instance_check_retries }}"
-  delay: "{{ instance_check_delay }}"
-  when: test_instance is changed
-
-- name: Fail if instances are not properly configured with SSM
+- name: Fail if instances are not accessible via SSM
   ansible.builtin.fail:
     msg: |
       Some instances are not properly configured with SSM after {{ test_timeout_minutes }} minutes.
       Please check:
-      1. IAM role and instance profile
-      2. Security group rules for SSM endpoints
+      1. IAM role and instance profile (AmazonSSMManagedInstanceCore)
+      2. Security group rules for SSM endpoints (443/tcp)
       3. VPC endpoints for SSM (if using private subnets)
-      4. Instance system logs for SSM agent status
+      4. Instance system logs at /var/log/amazon/ssm/amazon-ssm-agent.log
+      5. Network connectivity to SSM endpoints (ssm.{{ aws_region }}.amazonaws.com)
+      6. Internet connectivity for package updates
   when: >
     test_instance is changed and
-    (ssm_instance_status.instance_information | length == 0 or
-     ssm_config_status.instance_information | length == 0)
+    ssm_check.failed is defined
 
 - name: Warn if instances are not accessible via SSM
   ansible.builtin.fail:
     msg: "Warning: Some instances are not accessible via SSM after {{ test_timeout_minutes }} minutes. Check IAM roles and security groups."
-  when: test_instance is changed and (ssm_check.failed is defined or ssm_instance_status.instance_information | length == 0)
+  when: test_instance is changed and (ssm_connection.failed is defined or ssm_instance_status.instance_information | length == 0)
 
 - name: Create load balancer security group
   amazon.aws.ec2_security_group:
