@@ -2,22 +2,9 @@
 - name: Run preflight checks
   ansible.builtin.include_tasks: preflight.yml
 
-- name: Get local system specifications
-  ansible.builtin.setup:
-    gather_subset:
-      - hardware
-  register: local_specs
-
-- name: Calculate required instance type
-  ansible.builtin.set_fact:
-    required_ram_gb: "{{ (local_specs.ansible_facts.ansible_memtotal_mb / 1024) | round | int }}"
-    required_cpu: "{{ local_specs.ansible_facts.ansible_processor_vcpus }}"
-
 - name: Determine AWS instance type
   ansible.builtin.set_fact:
     selected_instance_type: "{{ instance_type_map[target_env].type }}"
-    required_ram_gb: "{{ instance_type_map[target_env].ram_gb }}"
-    required_vcpus: "{{ instance_type_map[target_env].vcpus }}"
 
 - name: Create AWS VPC for testing
   amazon.aws.ec2_vpc_net:
@@ -66,6 +53,8 @@
     tags:
       Name: "{{ vpc_config.name }}-nat-eip"
       AutoRemove: "yes"
+    reuse_existing_ip_allowed: true
+    in_vpc: true
   register: nat_eip
   when: nat_gateway_config.enabled
 
@@ -75,6 +64,7 @@
     subnet_id: "{{ public_subnets.results[0].subnet.id }}"
     allocation_id: "{{ nat_eip.allocation_id }}"
     region: "{{ aws_region }}"
+    if_exist_do_not_create: true
     tags:
       Name: "{{ nat_gateway_config.name }}"
       AutoRemove: "yes"
@@ -124,13 +114,12 @@
   amazon.aws.ec2_instance:
     name: "{{ environment_prefix }}-{{ target_env }}-{{ ansible_date_time.epoch }}"
     instance_type: "{{ selected_instance_type }}"
-    security_group: "{{ test_sg.group_id }}"
-    vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
     region: "{{ aws_region }}"
     image_id: "{{ ami_map[target_env] }}"
     key_name: "{{ ssh_config.key_name }}"
-    private_ip_address: "{{ static_ip_map[target_env].private_ip }}"
     iam_instance_profile: "SSMInstanceProfile"
+    vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
+    security_groups: ["{{ test_sg.group_id }}"]
     tags:
       Name: "{{ environment_prefix }}-{{ target_env }}"
       AutoRemove: "yes"
