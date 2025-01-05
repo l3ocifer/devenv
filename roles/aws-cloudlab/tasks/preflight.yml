@@ -75,7 +75,7 @@
   register: ssm_role
   failed_when: false
 
-- name: Create SSM instance profile if missing
+- name: Create SSM role if missing
   amazon.aws.iam_role:
     name: "SSMInstanceProfile"
     state: present
@@ -97,7 +97,15 @@
   register: ssm_role_create
   when: ssm_role.iam_roles | length == 0
 
-- name: Remove incorrect SSM instance profile
+- name: Create SSM instance profile
+  amazon.aws.iam_instance_profile:
+    name: "SSMInstanceProfile"
+    state: present
+    role: "SSMInstanceProfile"
+  register: ssm_profile
+  when: ssm_role_create is changed or ssm_role.iam_roles | length == 0
+
+- name: Remove incorrect SSM role
   amazon.aws.iam_role:
     name: "SSMInstanceProfile"
     state: absent
@@ -105,11 +113,16 @@
   when: 
     - ssm_role.iam_roles | length > 0
     - ssm_role.iam_roles[0].assume_role_policy_document is not defined or
-      ssm_role.iam_roles[0].assume_role_policy_document != assume_role_policy or
       'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' not in (ssm_role.iam_roles[0].attached_policies | map(attribute='policy_arn') | list)
   register: ssm_role_remove
 
-- name: Recreate SSM instance profile if removed
+- name: Remove incorrect SSM instance profile
+  amazon.aws.iam_instance_profile:
+    name: "SSMInstanceProfile"
+    state: absent
+  when: ssm_role_remove is changed
+
+- name: Recreate SSM role if removed
   amazon.aws.iam_role:
     name: "SSMInstanceProfile"
     state: present
@@ -128,4 +141,11 @@
       }
     managed_policies:
       - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  when: ssm_role_remove is changed
+
+- name: Recreate SSM instance profile if removed
+  amazon.aws.iam_instance_profile:
+    name: "SSMInstanceProfile"
+    state: present
+    role: "SSMInstanceProfile"
   when: ssm_role_remove is changed 
