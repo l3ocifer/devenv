@@ -12,6 +12,11 @@
     ssh_key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal"
 
   pre_tasks:
+    - name: Install required collections from requirements
+      command: ansible-galaxy install -r requirements.yml
+      changed_when: false
+      run_once: true
+
     - name: Verify AWS credentials
       command: aws sts get-caller-identity
       changed_when: false
