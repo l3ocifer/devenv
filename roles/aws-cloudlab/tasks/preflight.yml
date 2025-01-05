@@ -1,0 +1,106 @@
+---
+- name: Verify AWS credentials
+  ansible.builtin.command: aws sts get-caller-identity
+  environment:
+    AWS_PROFILE: "{{ aws_profile }}"
+  register: aws_creds_check
+  changed_when: false
+  failed_when: aws_creds_check.rc != 0
+
+- name: Verify target environment requirements
+  ansible.builtin.assert:
+    that:
+      - instance_type_map[target_env] is defined
+      - instance_type_map[target_env].ram_gb is defined
+      - instance_type_map[target_env].vcpus is defined
+    msg: "Invalid target environment: {{ target_env }}"
+
+- name: Check AWS service quotas
+  amazon.aws.aws_service_quota_info:
+    service_code: ec2
+    quota_code: L-1216C47A  # Running On-Demand instances
+    region: "{{ aws_region }}"
+  register: quota_check 
+
+- name: Verify SSH key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_key_path }}"
+  register: ssh_key
+  failed_when: not ssh_key.stat.exists
+
+- name: Verify SSH public key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_public_key_path }}"
+  register: ssh_pub_key
+  failed_when: not ssh_pub_key.stat.exists
+
+- name: Import SSH key to AWS if not exists
+  amazon.aws.ec2_key:
+    name: "{{ ssh_key_name }}"
+    key_material: "{{ lookup('file', ssh_public_key_path) }}"
+    region: "{{ aws_region }}"
+  register: aws_key
+  when: ssh_pub_key.stat.exists 
+
+- name: Verify SSH configuration
+  block:
+    - name: Check SSH key permissions
+      file:
+        path: "{{ item }}"
+        mode: "0600"
+      loop:
+        - "{{ ssh_config.key_path }}"
+        - "{{ ssh_config.public_key_path }}"
+      when: item is exists
+
+    - name: Verify SSH key format
+      command: "ssh-keygen -l -f {{ ssh_config.key_path }}"
+      changed_when: false
+      register: key_check
+      failed_when: key_check.rc != 0
+
+    - name: Check if key is already in AWS
+      amazon.aws.ec2_key:
+        name: "{{ ssh_config.key_name }}"
+        region: "{{ aws_region }}"
+      register: existing_key 
+
+- name: Verify NAT Gateway quota
+  amazon.aws.aws_service_quota_info:
+    service_code: vpc
+    quota_code: L-FE5A380F  # NAT Gateways per AZ
+    region: "{{ aws_region }}"
+  register: nat_quota_check
+
+- name: Verify EIP quota
+  amazon.aws.aws_service_quota_info:
+    service_code: ec2
+    quota_code: L-0263D0A3  # EC2-VPC Elastic IPs
+    region: "{{ aws_region }}"
+  register: eip_quota_check 
+
+- name: Verify SSM access
+  amazon.aws.iam_role_info:
+    name: "SSMInstanceProfile"
+  register: ssm_role
+  failed_when: ssm_role.iam_roles | length == 0
+
+- name: Create SSM instance profile if missing
+  amazon.aws.iam_role:
+    name: "SSMInstanceProfile"
+    assume_role_policy_document: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  when: ssm_role.iam_roles | length == 0 

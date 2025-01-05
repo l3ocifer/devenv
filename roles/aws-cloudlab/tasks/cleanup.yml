@@ -1,0 +1,73 @@
+---
+# Update cleanup order for dependencies
+- name: Delete load balancer
+  amazon.aws.elb_application_lb:
+    name: "{{ load_balancer_config.name }}"
+    state: absent
+    region: "{{ aws_region }}"
+    wait: yes
+  when: load_balancer_config.enabled and load_balancer is defined
+
+- name: Delete target group
+  amazon.aws.elb_target_group:
+    name: "{{ load_balancer_config.name }}-tg"
+    state: absent
+    region: "{{ aws_region }}"
+  when: load_balancer_config.enabled and target_group is defined
+
+- name: Delete load balancer security group
+  amazon.aws.ec2_security_group:
+    group_id: "{{ lb_sg.group_id }}"
+    state: absent
+    region: "{{ aws_region }}"
+  when: lb_sg is defined
+  retries: 3
+  delay: 10
+
+- name: Terminate instance
+  amazon.aws.ec2_instance:
+    instance_ids: "{{ test_instance.instances[0].instance_id }}"
+    state: absent
+    region: "{{ aws_region }}"
+    wait: yes
+  when: test_instance is defined
+
+- name: Delete NAT Gateway
+  amazon.aws.ec2_vpc_nat_gateway:
+    nat_gateway_id: "{{ nat_gateway.nat_gateway_id }}"
+    state: absent
+    region: "{{ aws_region }}"
+    wait: yes
+  when: nat_gateway is defined
+
+- name: Release EIPs
+  amazon.aws.ec2_eip:
+    allocation_id: "{{ item }}"
+    state: absent
+    region: "{{ aws_region }}"
+  loop:
+    - "{{ nat_eip.allocation_id | default(omit) }}"
+  when: nat_eip is defined
+
+- name: Delete VPC and dependencies
+  amazon.aws.ec2_vpc_net:
+    name: "{{ vpc_config.name }}"
+    state: absent
+    region: "{{ aws_region }}"
+  when: test_vpc is defined
+
+- name: Delete instance security group
+  amazon.aws.ec2_security_group:
+    group_id: "{{ test_sg.group_id }}"
+    state: absent
+    region: "{{ aws_region }}"
+  when: test_sg is defined
+  retries: 3
+  delay: 10
+
+- name: Delete internet gateway
+  amazon.aws.ec2_vpc_igw:
+    vpc_id: "{{ test_vpc.vpc.id }}"
+    state: absent
+    region: "{{ aws_region }}"
+  when: test_igw is defined

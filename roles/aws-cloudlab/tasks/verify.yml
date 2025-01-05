@@ -1,0 +1,46 @@
+---
+- name: Verify VPC configuration
+  assert:
+    that:
+      - test_vpc is defined
+      - test_vpc.vpc.id is defined
+      - test_vpc.vpc.cidr_block == vpc_config.cidr
+
+- name: Verify subnet configuration
+  assert:
+    that:
+      - public_subnets.results | length == 2
+      - private_subnets.results | length == 2
+      - nat_gateway is defined
+      - private_route_table is defined
+      - public_route_table is defined
+
+- name: Verify instance connectivity
+  command: >
+    aws ssm start-session 
+    --target {{ test_instance.instances[0].instance_id }}
+    --document-name AWS-StartInteractiveCommand 
+    --parameters command="curl -s https://checkip.amazonaws.com"
+  register: connectivity_check
+  retries: 3
+  delay: 10
+  until: connectivity_check.rc == 0
+
+- name: Verify load balancer (prod only)
+  assert:
+    that:
+      - load_balancer is defined
+      - target_group is defined
+      - lb_sg is defined
+  when: not test_mode | default(true)
+
+- name: Output verification status
+  debug:
+    msg: |
+      Infrastructure Verification Results:
+      - VPC: {{ test_vpc.vpc.id }}
+      - Public Subnets: {{ public_subnets.results | map(attribute='subnet.id') | list }}
+      - Private Subnets: {{ private_subnets.results | map(attribute='subnet.id') | list }}
+      - NAT Gateway: {{ nat_gateway.nat_gateway_id }}
+      - Instance ID: {{ test_instance.instances[0].instance_id }}
+      - Load Balancer: {{ load_balancer.dns_name if not test_mode | default(true) else 'Not Created (Test Mode)' }} 

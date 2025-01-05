@@ -1,0 +1,186 @@
+---
+# AWS Test Runner Configuration
+
+# AWS Configuration
+aws_region: "us-east-1"
+aws_profile: "default"
+aws_vpc_cidr: "10.0.0.0/16"
+aws_subnet_cidr: "10.0.1.0/24"
+
+# Instance Configuration
+instance_type_map:
+  "raspberry_pi":  # Matches RPi 3B specs
+    type: "t3.micro"
+    ram_gb: 1
+    vcpus: 1
+  "desktop":  # Matches desktop server specs
+    type: "t3.2xlarge"
+    ram_gb: 32
+    vcpus: 8
+
+# Test Configuration
+test_timeout_minutes: 30
+cleanup_on_success: true
+cleanup_on_failure: false  # Keep instance for debugging
+parallel_tests: 1  # Number of simultaneous test instances
+
+# Verification
+verification_retries: 3
+verification_delay: 30  # seconds between retries
+
+# Target Environment
+target_env: "{{ 'raspberry_pi' if ansible_memtotal_mb <= 1024 else 'desktop' }}"
+
+# SSH Configuration
+ssh_config:
+  user: "l3o"
+  key_name: "leo-personal"
+  key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal"
+  public_key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal.pub"
+  options:
+    ServerAliveInterval: 60
+    ServerAliveCountMax: 30
+    StrictHostKeyChecking: "ask"
+    VerifyHostKeyDNS: "yes"
+    ForwardAgent: "no"
+    AddKeysToAgent: "yes"
+
+# Additional Security
+security_group_rules:
+  - proto: tcp
+    ports: 22
+    cidr_ip: "{{ ansible_default_ipv4.address }}/32"
+  - proto: tcp
+    ports: 80
+    cidr_ip: "0.0.0.0/0"
+  - proto: tcp
+    ports: 443
+    cidr_ip: "0.0.0.0/0"
+
+# Environment Configuration
+deployment_mode: "{{ test_mode | default(true) | ternary('test', 'prod') }}"
+environment_prefix: "l3o-{{ deployment_mode }}"
+
+# VPC Configuration
+vpc_config:
+  name: "{{ environment_prefix }}-vpc"
+  cidr: "10.0.0.0/16"
+  enable_dns_hostnames: true
+  enable_dns_support: true
+  tags:
+    Name: "{{ environment_prefix }}-vpc"
+    Environment: "{{ deployment_mode }}"
+    AutoRemove: "{{ test_mode | default(true) | string }}"
+
+# Enhanced Subnet Configuration
+subnet_config:
+  public_1:
+    name: "{{ environment_prefix }}-public-1"
+    cidr: "10.0.1.0/24"
+    az: "{{ aws_region }}a"
+    map_public_ip: true
+    tags:
+      Environment: "{{ deployment_mode }}"
+      AutoRemove: "{{ test_mode | default(true) | string }}"
+  public_2:
+    name: "{{ environment_prefix }}-public-2"
+    cidr: "10.0.2.0/24"
+    az: "{{ aws_region }}b"
+    map_public_ip: true
+    tags:
+      AutoRemove: "yes"
+  private_1:
+    name: "{{ environment_prefix }}-private-1"
+    cidr: "10.0.3.0/24"
+    az: "{{ aws_region }}a"
+    map_public_ip: false
+    tags:
+      AutoRemove: "yes"
+  private_2:
+    name: "{{ environment_prefix }}-private-2"
+    cidr: "10.0.4.0/24"
+    az: "{{ aws_region }}b"
+    map_public_ip: false
+    tags:
+      AutoRemove: "yes"
+
+# Static IP Assignments (matching homelab)
+static_ip_map:
+  desktop:
+    private_ip: "10.0.3.10"  # In private_1 subnet
+  raspberry_pi:
+    private_ip: "10.0.3.11"  # In private_1 subnet
+
+# NAT Gateway Configuration
+nat_gateway_config:
+  enabled: true
+  name: "{{ environment_prefix }}-nat"
+  subnet: "public_1"
+  tags:
+    Name: "{{ environment_prefix }}-nat"
+    Environment: "{{ deployment_mode }}"
+    AutoRemove: "{{ test_mode | default(true) | string }}"
+  routes:
+    - dest: "0.0.0.0/0"
+      description: "Internet access via NAT Gateway"
+
+# Security Configuration
+security_groups:
+  instances:
+    name: "{{ environment_prefix }}-sg"
+    description: "Security group for {{ deployment_mode }} instances"
+    rules:
+      ingress:
+        - proto: tcp
+          ports: [22]
+          cidr_ip: "{{ vpc_config.cidr }}"
+          description: "SSH access from VPC only"
+        - proto: all
+          from_port: -1
+          to_port: -1
+          cidr_ip: "10.0.0.0/16"
+          description: "All internal VPC traffic"
+      egress:
+        - proto: -1
+          from_port: -1
+          to_port: -1
+          cidr_ip: "0.0.0.0/0"
+          description: "Allow all outbound traffic via NAT"
+
+# Add load balancer configuration
+load_balancer_config:
+  enabled: "{{ not test_mode | default(true) }}"
+  name: "{{ environment_prefix }}-lb"
+  type: "application"
+  scheme: "internet-facing"
+  tags:
+    Environment: "{{ deployment_mode }}"
+    AutoRemove: "{{ test_mode | default(true) | string }}"
+  subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
+  security_group_rules:
+    - proto: tcp
+      from_port: 80
+      to_port: 80
+      cidr_ip: "0.0.0.0/0"
+    - proto: tcp
+      from_port: 443
+      to_port: 443
+      cidr_ip: "0.0.0.0/0"
+  listeners:
+    - port: 80
+      protocol: "HTTP"
+      default_actions:
+        - type: "forward"
+          target_group_arn: "{{ target_group_arn }}"
+    - port: 443
+      protocol: "HTTPS"
+      ssl_policy: "ELBSecurityPolicy-2016-08"
+      certificates: []  # Add certificate ARNs for prod
+      default_actions:
+        - type: "forward"
+          target_group_arn: "{{ target_group_arn }}"
+
+# Add AMI mapping
+ami_map:
+  desktop: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS amd64
+  raspberry_pi: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS arm64
