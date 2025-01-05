@@ -47,6 +47,14 @@
   loop: "{{ subnet_config | dict2items | selectattr('key', 'match', '^private_') | list }}"
   register: private_subnets
 
+- name: Check for existing route tables
+  amazon.aws.ec2_vpc_route_table_info:
+    region: "{{ aws_region }}"
+    filters:
+      vpc-id: "{{ test_vpc.vpc.id }}"
+      "tag:ResourceId": ["{{ vpc_config.name }}-public-rt-{{ test_vpc.vpc.id }}", "{{ vpc_config.name }}-private-rt-{{ test_vpc.vpc.id }}"]
+  register: existing_route_tables
+
 - name: Check for existing EIPs
   amazon.aws.ec2_eip_info:
     region: "{{ aws_region }}"
@@ -64,14 +72,25 @@
       tag:Name: "{{ nat_gateway_config.name }}"
       tag:AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
       state: ["available", "pending"]
+      vpc-id: "{{ test_vpc.vpc.id }}"
   register: existing_nat_gateways
   when: nat_gateway_config.enabled
 
-- name: Use existing EIP
+- name: Check for existing EIPs
+  amazon.aws.ec2_eip_info:
+    region: "{{ aws_region }}"
+    filters:
+      tag:Name: "{{ nat_gateway_config.name }}-eip"
+      tag:AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+  register: existing_eips
+  when: nat_gateway_config.enabled
+
+- name: Set NAT gateway facts
   ansible.builtin.set_fact:
-    nat_eip:
-      allocation_id: "{{ existing_eips.addresses[0].allocation_id }}"
-  when: nat_gateway_config.enabled and existing_eips.addresses | length > 0
+    nat_gateway_exists: "{{ existing_nat_gateways.result | length > 0 and existing_nat_gateways.result[0].state in ['available', 'pending'] }}"
+    nat_gateway_has_eip: "{{ nat_gateway_exists | bool and existing_nat_gateways.result[0].nat_gateway_addresses | length > 0 }}"
+    existing_eip_id: "{{ existing_nat_gateways.result[0].nat_gateway_addresses[0].allocation_id if (nat_gateway_exists | bool and nat_gateway_has_eip | bool) else (existing_eips.addresses[0].allocation_id if existing_eips.addresses | length > 0 else '') }}"
+  when: nat_gateway_config.enabled
 
 - name: Create NAT Gateway EIP
   amazon.aws.ec2_eip:
@@ -80,45 +99,49 @@
       Name: "{{ nat_gateway_config.name }}-eip"
       Environment: "{{ deployment_mode }}"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
-    reuse_existing_ip_allowed: true
     in_vpc: true
     state: present
   register: nat_eip
-  when: nat_gateway_config.enabled and existing_eips.addresses | length == 0
-
-- name: Use existing NAT gateway
-  ansible.builtin.set_fact:
-    nat_gateway:
-      nat_gateway_id: "{{ existing_nat_gateways.result[0].nat_gateway_id }}"
-  when: nat_gateway_config.enabled and existing_nat_gateways.result | length > 0 and existing_nat_gateways.result[0].state in ['available', 'pending']
+  when: >
+    nat_gateway_config.enabled and
+    not nat_gateway_has_eip | bool and
+    existing_eip_id == ''
 
 - name: Create NAT Gateway
   amazon.aws.ec2_vpc_nat_gateway:
     state: present
     subnet_id: "{{ public_subnets.results[0].subnet.id }}"
-    allocation_id: "{{ (nat_eip | default({})).allocation_id | default(existing_eips.addresses[0].allocation_id) }}"
+    allocation_id: "{{ existing_eip_id if (existing_eip_id != '') else nat_eip.allocation_id }}"
     region: "{{ aws_region }}"
     wait: true
     wait_timeout: 600
-    if_exist_do_not_create: true
     tags: "{{ nat_gateway_config.tags }}"
   register: nat_gateway
   when: >
     nat_gateway_config.enabled and
-    (existing_nat_gateways.result | length == 0 or existing_nat_gateways.result[0].state not in ['available', 'pending']) and
-    ((nat_eip is defined and nat_eip.allocation_id is defined) or (existing_eips.addresses | length > 0))
+    not nat_gateway_exists | bool
+
+- name: Set active NAT gateway ID
+  ansible.builtin.set_fact:
+    active_nat_gateway_id: >-
+      {{
+        nat_gateway.nat_gateway_id | default(
+          existing_nat_gateways.result[0].nat_gateway_id if nat_gateway_exists | bool else None
+        )
+      }}
+  when: nat_gateway_config.enabled
 
 - name: Wait for NAT gateway to be available
   amazon.aws.ec2_vpc_nat_gateway_info:
     region: "{{ aws_region }}"
-    nat_gateway_ids: "{{ nat_gateway.nat_gateway_id | default(existing_nat_gateways.result[0].nat_gateway_id) }}"
+    nat_gateway_ids: "{{ active_nat_gateway_id }}"
     filters:
       state: ["available"]
   register: nat_gateway_status
-  until: nat_gateway_status.result | length > 0
+  until: nat_gateway_status.result | length > 0 and nat_gateway_status.result[0].state == 'available'
   retries: 30
   delay: 10
-  when: nat_gateway_config.enabled and (nat_gateway.changed or existing_nat_gateways.result | length > 0)
+  when: nat_gateway_config.enabled and active_nat_gateway_id is defined
 
 - name: Create security group
   amazon.aws.ec2_security_group:
@@ -127,7 +150,11 @@
     vpc_id: "{{ test_vpc.vpc.id }}"
     region: "{{ aws_region }}"
     rules: "{{ security_groups.test_instances.rules.ingress }}"
-    rules_egress: "{{ security_groups.test_instances.rules.egress }}"
+    rules_egress:
+      - proto: all
+        from_port: -1
+        to_port: -1
+        cidr_ip: 0.0.0.0/0
     tags:
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: test_sg
@@ -139,6 +166,7 @@
     tags:
       Name: "{{ vpc_config.name }}-public-rt"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+      ResourceId: "{{ vpc_config.name }}-public-rt-{{ test_vpc.vpc.id }}"
     purge_routes: false
     purge_subnets: false
     purge_tags: false
@@ -147,6 +175,9 @@
       - dest: "0.0.0.0/0"
         gateway_id: "{{ test_igw.gateway_id }}"
   register: public_route_table
+  when: >
+    not existing_route_tables.route_tables or
+    not existing_route_tables.route_tables | selectattr('tags.ResourceId', 'equalto', vpc_config.name + '-public-rt-' + test_vpc.vpc.id) | list
 
 - name: Create private route table
   amazon.aws.ec2_vpc_route_table:
@@ -155,24 +186,55 @@
     tags:
       Name: "{{ vpc_config.name }}-private-rt"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
-    purge_routes: false
+      ResourceId: "{{ vpc_config.name }}-private-rt-{{ test_vpc.vpc.id }}"
+    purge_routes: true
     purge_subnets: false
     purge_tags: false
     subnets: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
     routes:
       - dest: "0.0.0.0/0"
-        nat_gateway_id: "{{ nat_gateway_status.result[0].nat_gateway_id }}"
+        nat_gateway_id: "{{ active_nat_gateway_id }}"
   register: private_route_table
-  when: nat_gateway_config.enabled and nat_gateway_status.result | length > 0
+  when: >
+    nat_gateway_config.enabled and
+    active_nat_gateway_id is defined and
+    (not existing_route_tables.route_tables or
+    not existing_route_tables.route_tables | selectattr('tags.ResourceId', 'equalto', vpc_config.name + '-private-rt-' + test_vpc.vpc.id) | list)
+
+- name: Wait for route propagation
+  ansible.builtin.pause:
+    seconds: 30
+  when: private_route_table.changed or public_route_table.changed
 
 - name: Check for existing instances
   amazon.aws.ec2_instance_info:
     region: "{{ aws_region }}"
     filters:
       "tag:Name": "{{ environment_prefix }}-{{ target_env }}"
-      "tag:AutoRemove": "yes"
-      instance-state-name: ["pending", "running"]
+      "tag:AutoRemove": "{{ deployment_type | default('test') != 'prod' | string }}"
+      instance-state-name: ["pending", "running", "stopping", "stopped"]
   register: existing_instances
+
+- name: Verify existing instance health
+  amazon.aws.ec2_instance_info:
+    instance_ids: "{{ existing_instances.instances | map(attribute='instance_id') | list }}"
+    region: "{{ aws_region }}"
+  register: instance_health
+  when: existing_instances.instances | length > 0
+
+- name: Terminate unhealthy instances
+  amazon.aws.ec2_instance:
+    instance_ids: "{{ item.instance_id }}"
+    state: absent
+    region: "{{ aws_region }}"
+    wait: yes
+  loop: "{{ instance_health.instances }}"
+  when: >
+    existing_instances.instances | length > 0 and
+    (item.state.name not in ['running', 'pending'] or
+    item.instance_status is not defined or
+    item.instance_status.status != 'ok')
+  register: terminated_instances
 
 - name: Launch test instances
   amazon.aws.ec2_instance:
@@ -192,14 +254,19 @@
       Name: "{{ environment_prefix }}-{{ target_env }}"
       AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
       Environment: "{{ deployment_mode }}"
+      ClientToken: "{{ environment_prefix }}-{{ target_env }}-{{ test_vpc.vpc.id }}"
   register: test_instance
-  when: existing_instances.instances | length != instance_count
+  when: >
+    existing_instances.instances | length != instance_count or
+    terminated_instances.changed
 
 - name: Use existing instances
   ansible.builtin.set_fact:
     test_instance:
       instances: "{{ existing_instances.instances }}"
-  when: existing_instances.instances | length == instance_count
+  when: >
+    existing_instances.instances | length == instance_count and
+    not terminated_instances.changed
 
 - name: Wait for instances to be ready
   amazon.aws.ec2_instance_info:

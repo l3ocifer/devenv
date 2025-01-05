@@ -34,20 +34,44 @@
 
 - name: Delete NAT Gateway
   amazon.aws.ec2_vpc_nat_gateway:
-    nat_gateway_id: "{{ nat_gateway.nat_gateway_id }}"
+    nat_gateway_id: "{{ item.nat_gateway_id }}"
     state: absent
     region: "{{ aws_region }}"
     wait: yes
-  when: cleanup_enabled | bool and nat_gateway_config.enabled and nat_gateway is defined
+  loop: "{{ existing_nat_gateways.result | default([]) }}"
+  when: cleanup_enabled | bool and nat_gateway_config.enabled
+
+- name: Wait for NAT Gateway deletion
+  amazon.aws.ec2_vpc_nat_gateway_info:
+    region: "{{ aws_region }}"
+    nat_gateway_ids: "{{ item.nat_gateway_id }}"
+  register: nat_gateway_status
+  until: nat_gateway_status.result | length == 0
+  retries: 30
+  delay: 10
+  loop: "{{ existing_nat_gateways.result | default([]) }}"
+  when: cleanup_enabled | bool and nat_gateway_config.enabled
 
 - name: Release EIPs
   amazon.aws.ec2_eip:
-    allocation_id: "{{ item }}"
+    allocation_id: "{{ item.allocation_id }}"
+    state: absent
+    region: "{{ aws_region }}"
+  loop: "{{ existing_eips.addresses | default([]) }}"
+  when: cleanup_enabled | bool and nat_gateway_config.enabled
+
+- name: Delete route tables
+  amazon.aws.ec2_vpc_route_table:
+    vpc_id: "{{ test_vpc.vpc.id }}"
+    route_table_id: "{{ item }}"
+    lookup: id
     state: absent
     region: "{{ aws_region }}"
   loop:
-    - "{{ nat_eip.allocation_id | default(omit) }}"
-  when: cleanup_enabled | bool and nat_gateway_config.enabled and nat_eip is defined
+    - "{{ public_route_table.route_table.id | default(omit) }}"
+    - "{{ private_route_table.route_table.id | default(omit) }}"
+  when: cleanup_enabled | bool and (public_route_table is defined or private_route_table is defined)
+  ignore_errors: true
 
 - name: Delete VPC and dependencies
   amazon.aws.ec2_vpc_net:
