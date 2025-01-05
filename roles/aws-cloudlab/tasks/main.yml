@@ -153,16 +153,6 @@
   delay: "{{ instance_check_delay }}"
   when: test_instance is changed
 
-- name: Verify SSM connectivity
-  community.aws.aws_ssm_parameter_info:
-    name: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-    region: "{{ aws_region }}"
-  register: ssm_check
-  until: ssm_check is success
-  retries: "{{ instance_check_retries }}"
-  delay: "{{ instance_check_delay }}"
-  when: test_instance is changed
-
 - name: Check SSM instance status
   amazon.aws.aws_ssm_info:
     region: "{{ aws_region }}"
@@ -174,6 +164,39 @@
   retries: "{{ instance_check_retries }}"
   delay: "{{ instance_check_delay }}"
   when: test_instance is changed
+
+- name: Verify instance SSM configuration
+  amazon.aws.aws_ssm_info:
+    region: "{{ aws_region }}"
+    instance_information_filter:
+      - key: InstanceIds
+        values: "{{ test_instance.results | map(attribute='instance_ids') | flatten | list }}"
+      - key: PlatformTypes
+        values: ["Linux"]
+      - key: ResourceType
+        values: ["EC2Instance"]
+  register: ssm_config_status
+  until: >
+    ssm_config_status.instance_information | length > 0 and
+    ssm_config_status.instance_information | map(attribute='PingStatus') | list | unique == ['Online'] and
+    ssm_config_status.instance_information | map(attribute='AssociationStatus') | list | unique == ['Success']
+  retries: "{{ instance_check_retries }}"
+  delay: "{{ instance_check_delay }}"
+  when: test_instance is changed
+
+- name: Fail if instances are not properly configured with SSM
+  ansible.builtin.fail:
+    msg: |
+      Some instances are not properly configured with SSM after {{ test_timeout_minutes }} minutes.
+      Please check:
+      1. IAM role and instance profile
+      2. Security group rules for SSM endpoints
+      3. VPC endpoints for SSM (if using private subnets)
+      4. Instance system logs for SSM agent status
+  when: >
+    test_instance is changed and
+    (ssm_instance_status.instance_information | length == 0 or
+     ssm_config_status.instance_information | length == 0)
 
 - name: Warn if instances are not accessible via SSM
   ansible.builtin.fail:
