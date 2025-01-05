@@ -6,21 +6,21 @@
     state: absent
     region: "{{ aws_region }}"
     wait: yes
-  when: load_balancer_config.enabled and load_balancer is defined
+  when: deployment_type | default('test') == 'prod' and load_balancer_config.enabled and load_balancer is defined and cleanup_requested | default(false)
 
 - name: Delete target group
-  amazon.aws.elb_target_group:
+  community.aws.elb_target_group:
     name: "{{ load_balancer_config.name }}-tg"
     state: absent
     region: "{{ aws_region }}"
-  when: load_balancer_config.enabled and target_group is defined
+  when: deployment_type | default('test') == 'prod' and load_balancer_config.enabled and target_group is defined and cleanup_requested | default(false)
 
 - name: Delete load balancer security group
   amazon.aws.ec2_security_group:
     group_id: "{{ lb_sg.group_id }}"
     state: absent
     region: "{{ aws_region }}"
-  when: lb_sg is defined
+  when: deployment_type | default('test') == 'prod' and lb_sg is defined and cleanup_requested | default(false)
   retries: 3
   delay: 10
 
@@ -30,7 +30,7 @@
     state: absent
     region: "{{ aws_region }}"
     wait: yes
-  when: test_instance is defined
+  when: cleanup_enabled | bool and test_instance is defined
 
 - name: Delete NAT Gateway
   amazon.aws.ec2_vpc_nat_gateway:
@@ -38,7 +38,7 @@
     state: absent
     region: "{{ aws_region }}"
     wait: yes
-  when: nat_gateway is defined
+  when: cleanup_enabled | bool and nat_gateway_config.enabled and nat_gateway is defined
 
 - name: Release EIPs
   amazon.aws.ec2_eip:
@@ -47,21 +47,21 @@
     region: "{{ aws_region }}"
   loop:
     - "{{ nat_eip.allocation_id | default(omit) }}"
-  when: nat_eip is defined
+  when: cleanup_enabled | bool and nat_gateway_config.enabled and nat_eip is defined
 
 - name: Delete VPC and dependencies
   amazon.aws.ec2_vpc_net:
     name: "{{ vpc_config.name }}"
     state: absent
     region: "{{ aws_region }}"
-  when: test_vpc is defined
+  when: cleanup_enabled | bool and test_vpc is defined
 
 - name: Delete instance security group
   amazon.aws.ec2_security_group:
     group_id: "{{ test_sg.group_id }}"
     state: absent
     region: "{{ aws_region }}"
-  when: test_sg is defined
+  when: cleanup_enabled | bool and test_sg is defined
   retries: 3
   delay: 10
 
@@ -70,4 +70,4 @@
     vpc_id: "{{ test_vpc.vpc.id }}"
     state: absent
     region: "{{ aws_region }}"
-  when: test_igw is defined
+  when: cleanup_enabled | bool and test_igw is defined

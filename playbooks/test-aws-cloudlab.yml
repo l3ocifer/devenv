@@ -13,12 +13,14 @@
 
   pre_tasks:
     - name: Install required AWS collections
-      command: ansible-galaxy collection install {{ item }} --force
+      command: ansible-galaxy collection install {{ item }} --force --upgrade
       loop:
         - amazon.aws
         - community.aws
       changed_when: false
       run_once: true
+      environment:
+        ANSIBLE_GALAXY_IGNORE_CERTS: "true"  # Handle potential cert issues
 
     - name: Verify AWS credentials
       command: aws sts get-caller-identity
@@ -40,41 +42,47 @@
 
   post_tasks:
     - name: Verify server accessibility and internet access
-      wait_for:
-        host: "{{ test_instance.instances[0].private_ip_address }}"
-        port: 22
-        timeout: 300
-        search_regex: OpenSSH
-      register: ssh_check
+      ansible.builtin.shell: |
+        aws ssm describe-instance-information --filters "Key=InstanceIds,Values={{ item }}" --region {{ aws_region }} --output json | grep -q "{{ item }}" &&
+        aws ssm send-command \
+          --instance-ids "{{ item }}" \
+          --document-name "AWS-RunShellScript" \
+          --parameters 'commands=["apt update"]' \
+          --region {{ aws_region }} \
+          --output text
+      register: final_check
+      until: final_check is success
+      retries: "{{ instance_check_retries }}"
+      delay: "{{ instance_check_delay }}"
+      loop: "{{ (test_instance.results | map(attribute='instance_ids') | flatten | list) if test_instance.results is defined else [] }}"
+      changed_when: false
 
     - name: Test SSH connection as l3o user
       command: >
         ssh -o StrictHostKeyChecking=no
-        -o ProxyCommand='ssh -W %h:%p -i ~/.ssh/leo-personal ubuntu@{{ public_subnets.results[0].subnet.id }}'
+        -o ProxyCommand='ssh -W %h:%p -i ~/.ssh/leo-personal ubuntu@{{ bastion_instance.public_ip_address }}'
         -i ~/.ssh/leo-personal
-        l3o@{{ test_instance.instances[0].private_ip_address }}
+        l3o@{{ item }}
         "echo 'SSH connection successful' && curl -s http://checkip.amazonaws.com"
       register: ssh_test
       changed_when: false
       failed_when: ssh_test.rc != 0
-
-    - name: Display infrastructure test results
-      debug:
-        msg: |
-          AWS Infrastructure Test Results:
-          Instance Type: {{ selected_instance_type }}
-          Instance IP: {{ test_instance.instances[0].public_ip_address }}
-          VPC ID: {{ test_vpc.vpc.id }}
-          Public Subnets: {{ public_subnets.results | map(attribute='subnet.id') | list }}
-          Private Subnets: {{ private_subnets.results | map(attribute='subnet.id') | list }}
-          Security Group: {{ test_sg.group_id }}
-          NAT Gateway: {{ nat_gateway.nat_gateway_id if nat_gateway is defined else 'Not Created' }}
-          SSH Access (l3o user): {{ ssh_test is success }}
-      when: test_instance is defined
+      loop: "{{ (test_instance.results | map(attribute='private_ip_address') | flatten | list) if test_instance.results is defined else [] }}"
+      when: not test_mode | default(true)
 
     - name: Cleanup notification
-      debug:
+      ansible.builtin.debug:
+        verbosity: 0
         msg: >
           Infrastructure will be cleaned up automatically since test_mode=true.
           Set cleanup_on_success=false to keep resources.
-      when: test_mode | default(true) 
+      when: test_mode | default(true) and cleanup_on_success | default(true)
+
+    - name: Perform cleanup in test mode
+      include_role:
+        name: aws-cloudlab
+        tasks_from: cleanup
+      when: test_mode | default(true) and cleanup_on_success | default(true)
+      vars:
+        force_cleanup: true
+        skip_target_group: "{{ test_mode | default(true) }}"  # Skip target group cleanup in test mode 

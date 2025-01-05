@@ -61,7 +61,22 @@ security_group_rules:
     cidr_ip: "0.0.0.0/0"
 
 # Environment Configuration
-deployment_mode: "{{ test_mode | default(true) | ternary('test', 'prod') }}"
+deployment_mode: >-
+  {%- if deployment_type | default('test') == 'prod' -%}
+    prod
+  {%- elif deployment_type | default('test') == 'dev' -%}
+    dev
+  {%- else -%}
+    test
+  {%- endif -%}
+cleanup_enabled: >-
+  {%- if deployment_type | default('test') == 'test' -%}
+    true
+  {%- elif cleanup_requested | default(false) -%}
+    true
+  {%- else -%}
+    false
+  {%- endif -%}
 environment_prefix: "l3o-{{ deployment_mode }}"
 
 # VPC Configuration
@@ -73,7 +88,7 @@ vpc_config:
   tags:
     Name: "{{ environment_prefix }}-vpc"
     Environment: "{{ deployment_mode }}"
-    AutoRemove: "{{ test_mode | default(true) | string }}"
+    AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
 
 # Enhanced Subnet Configuration
 subnet_config:
@@ -84,7 +99,7 @@ subnet_config:
     map_public_ip: true
     tags:
       Environment: "{{ deployment_mode }}"
-      AutoRemove: "{{ test_mode | default(true) | string }}"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   public_2:
     name: "{{ environment_prefix }}-public-2"
     cidr: "10.0.2.0/24"
@@ -122,7 +137,7 @@ nat_gateway_config:
   tags:
     Name: "{{ environment_prefix }}-nat"
     Environment: "{{ deployment_mode }}"
-    AutoRemove: "{{ test_mode | default(true) | string }}"
+    AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   routes:
     - dest: "0.0.0.0/0"
       description: "Internet access via NAT Gateway"
@@ -149,14 +164,14 @@ security_groups:
 
 # Add load balancer configuration
 load_balancer_config:
-  enabled: "{{ not test_mode | default(true) }}"
+  enabled: "{{ deployment_type | default('test') == 'prod' }}"
   name: "{{ environment_prefix }}-lb"
   type: "application"
   scheme: "internet-facing"
   tags:
     Environment: "{{ deployment_mode }}"
-    AutoRemove: "{{ test_mode | default(true) | string }}"
-  subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list if not test_mode | default(true) else [] }}"
+    AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+  subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list if deployment_type == 'prod' else [] }}"
   security_group_rules:
     - proto: tcp
       from_port: 80

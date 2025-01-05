@@ -22,7 +22,7 @@
     region: "{{ aws_region }}"
     tags:
       Name: "{{ vpc_config.name }}-igw"
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: test_igw
 
 - name: Create public subnets
@@ -52,7 +52,7 @@
     region: "{{ aws_region }}"
     filters:
       tag:Name: "{{ nat_gateway_config.name }}-eip"
-      tag:AutoRemove: "{{ test_mode | default(true) | string }}"
+      tag:AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: existing_eips
   when: nat_gateway_config.enabled
 
@@ -61,7 +61,7 @@
     region: "{{ aws_region }}"
     filters:
       tag:Name: "{{ nat_gateway_config.name }}"
-      tag:AutoRemove: "{{ test_mode | default(true) | string }}"
+      tag:AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
       state: ["available"]
   register: existing_nat_gateways
   when: nat_gateway_config.enabled
@@ -72,7 +72,7 @@
     tags:
       Name: "{{ nat_gateway_config.name }}-eip"
       Environment: "{{ deployment_mode }}"
-      AutoRemove: "{{ test_mode | default(true) | string }}"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
     reuse_existing_ip_allowed: true
     in_vpc: true
     state: present
@@ -126,7 +126,7 @@
     rules: "{{ security_groups.test_instances.rules.ingress }}"
     rules_egress: "{{ security_groups.test_instances.rules.egress }}"
     tags:
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: test_sg
 
 - name: Create public route table
@@ -135,7 +135,7 @@
     region: "{{ aws_region }}"
     tags:
       Name: "{{ vpc_config.name }}-public-rt"
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
     subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
     routes:
       - dest: "0.0.0.0/0"
@@ -148,7 +148,7 @@
     region: "{{ aws_region }}"
     tags:
       Name: "{{ vpc_config.name }}-private-rt"
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
     subnets: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
     routes:
       - dest: "0.0.0.0/0"
@@ -167,7 +167,7 @@
 
 - name: Launch test instances
   amazon.aws.ec2_instance:
-    name: "{{ environment_prefix }}-{{ target_env }}-{{ '%02d' | format(item) }}"
+    name: "{{ environment_prefix }}-{{ target_env }}-{{ '%02d' | format(item | int) }}"
     instance_type: "{{ selected_instance_type }}"
     region: "{{ aws_region }}"
     image_id: "{{ ami_map[target_env] }}"
@@ -178,50 +178,49 @@
     state: present
     tags:
       Name: "{{ environment_prefix }}-{{ target_env }}"
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
       Environment: "{{ deployment_mode }}"
   register: test_instance
   when: existing_instances.instances | length < instance_count
-  loop: "{{ range(existing_instances.instances | length + 1, instance_count + 1) | list }}"
+  loop: "{{ range(existing_instances.instances | length + 1, instance_count + 1) | list | map('string') | list }}"
 
 - name: Use existing instances
   ansible.builtin.set_fact:
     test_instance:
-      instances: "{{ existing_instances.instances }}"
+      results:
+        - instance_ids: "{{ existing_instances.instances | map(attribute='instance_id') | list }}"
   when: existing_instances.instances | length >= instance_count
 
 - name: Wait for instances to be ready
-  ansible.builtin.wait_for:
-    timeout: "{{ test_timeout_minutes * 60 }}"
-  register: instance_wait
-  failed_when: false
-  until: instance_wait is success
-  retries: "{{ instance_check_retries }}"
-  delay: "{{ instance_check_delay }}"
-  when: test_instance is changed
-
-- name: Check instance status
   amazon.aws.ec2_instance_info:
     instance_ids: "{{ test_instance.results | map(attribute='instance_ids') | flatten }}"
     region: "{{ aws_region }}"
   register: instance_status
-  until: instance_status.instances | map(attribute='state.name') | list | unique == ['running']
+  until: >
+    instance_status.instances | length > 0 and
+    instance_status.instances | map(attribute='state.name') | list | unique == ['running'] and
+    instance_status.instances | map(attribute='state.code') | list | unique == [16] and
+    (instance_status.instances | map(attribute='system_status.status') | list | unique == ['ok']) and
+    (instance_status.instances | map(attribute='instance_status.status') | list | unique == ['ok'])
   retries: "{{ instance_check_retries }}"
   delay: "{{ instance_check_delay }}"
   when: test_instance is changed
 
 - name: Verify SSM connectivity and internet access
-  ansible.builtin.command: sudo apt update
-  vars:
-    ansible_connection: community.aws.aws_ssm
-    ansible_aws_ssm_region: "{{ aws_region }}"
-    ansible_aws_ssm_instance_id: "{{ item }}"
+  ansible.builtin.shell: |
+    aws ssm describe-instance-information --filters "Key=InstanceIds,Values={{ item }}" --region {{ aws_region }} --output json | grep -q "{{ item }}" &&
+    aws ssm send-command \
+      --instance-ids "{{ item }}" \
+      --document-name "AWS-RunShellScript" \
+      --parameters 'commands=["apt update"]' \
+      --region {{ aws_region }} \
+      --output text
   register: ssm_check
   until: ssm_check is success
   retries: "{{ instance_check_retries }}"
   delay: "{{ instance_check_delay }}"
-  loop: "{{ test_instance.results | map(attribute='instance_ids') | flatten | list }}"
-  when: test_instance is changed
+  loop: "{{ (test_instance.results | map(attribute='instance_ids') | flatten | list) if test_instance.results is defined else [] }}"
+  changed_when: false
 
 - name: Fail if instances are not accessible via SSM
   ansible.builtin.fail:
@@ -234,14 +233,7 @@
       4. Instance system logs at /var/log/amazon/ssm/amazon-ssm-agent.log
       5. Network connectivity to SSM endpoints (ssm.{{ aws_region }}.amazonaws.com)
       6. Internet connectivity for package updates
-  when: >
-    test_instance is changed and
-    ssm_check.failed is defined
-
-- name: Warn if instances are not accessible via SSM
-  ansible.builtin.fail:
-    msg: "Warning: Some instances are not accessible via SSM after {{ test_timeout_minutes }} minutes. Check IAM roles and security groups."
-  when: test_instance is changed and (ssm_connection.failed is defined or ssm_instance_status.instance_information | length == 0)
+  when: ssm_check.failed is defined
 
 - name: Create load balancer security group
   amazon.aws.ec2_security_group:
@@ -251,9 +243,9 @@
     region: "{{ aws_region }}"
     rules: "{{ load_balancer_config.security_group_rules }}"
     tags:
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: lb_sg
-  when: not test_mode | default(true)
+  when: deployment_type | default('test') == 'prod'
 
 - name: Create target group
   community.aws.elb_target_group:
@@ -269,9 +261,9 @@
     unhealthy_threshold_count: 2
     region: "{{ aws_region }}"
     tags:
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: target_group
-  when: not test_mode | default(true)
+  when: deployment_type | default('test') == 'prod'
 
 - name: Set load balancer listeners
   ansible.builtin.set_fact:
@@ -288,7 +280,7 @@
         default_actions:
           - type: "forward"
             target_group_arn: "{{ target_group.target_group_arn }}"
-  when: not test_mode | default(true)
+  when: deployment_type | default('test') == 'prod'
 
 - name: Create load balancer
   community.aws.elb_application_lb:
@@ -299,9 +291,9 @@
     state: present
     region: "{{ aws_region }}"
     tags:
-      AutoRemove: "yes"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
   register: load_balancer
-  when: not test_mode | default(true)
+  when: deployment_type | default('test') == 'prod'
 
 - name: Register instance with target group
   community.aws.elb_target:
@@ -309,11 +301,11 @@
     target_id: "{{ test_instance.instances[0].instance_id }}"
     state: present
     region: "{{ aws_region }}"
-  when: not test_mode | default(true)
+  when: deployment_type | default('test') == 'prod'
 
 - name: Configure instance SSH settings
   amazon.aws.ec2_instance:
-    instance_ids: "{{ test_instance.instances[0].instance_id }}"
+    instance_ids: "{{ item }}"
     region: "{{ aws_region }}"
     state: present
     user_data: |
@@ -325,9 +317,10 @@
       chmod 700 /home/{{ ssh_config.user }}/.ssh
       chmod 600 /home/{{ ssh_config.user }}/.ssh/authorized_keys
       echo "{{ ssh_config.user }} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/{{ ssh_config.user }}
-  when: test_instance is defined
+  loop: "{{ (test_instance.results | map(attribute='instance_ids') | flatten | list) if test_instance.results is defined else [] }}"
+  when: deployment_type | default('test') == 'prod'
 
 - name: Wait for user setup
   pause:
     seconds: 30
-  when: test_instance is defined
+  when: deployment_type | default('test') == 'prod'

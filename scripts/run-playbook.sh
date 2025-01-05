@@ -3,6 +3,7 @@
 # Colors for better readability
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Directory setup - use git root directory
@@ -41,6 +42,7 @@ done < <(find "$playbooks_dir" -maxdepth 1 -name "*.yml" -print0 | sort -z)
 
 # Environment options
 environments=("alef" "legion")
+deployment_types=("dev" "test" "prod")
 
 # Print header
 echo -e "${BLUE}=== Ansible Playbook Runner ===${NC}"
@@ -84,33 +86,58 @@ if [ -z "${environments[$env_index]}" ]; then
     exit 1
 fi
 
+# List deployment types
+echo -e "\n${GREEN}Deployment Type:${NC}"
+echo -e "${YELLOW}dev${NC}  - Development environment (no cleanup)"
+echo -e "${YELLOW}test${NC} - Test environment (with cleanup)"
+echo -e "${YELLOW}prod${NC} - Production environment (with load balancer)"
+for i in "${!deployment_types[@]}"; do
+    echo "$((i+1))) ${deployment_types[$i]}"
+done
+
+# Get deployment type selection with default
+default_type=${LAST_TYPE:-2}  # Default to test
+read -p "Select deployment type [${default_type}]: " type_num
+type_num=${type_num:-$default_type}
+type_index=$((type_num-1))
+
+if [ -z "${deployment_types[$type_index]}" ]; then
+    echo "Invalid deployment type selection"
+    exit 1
+fi
+
+# Get instance count with default
+echo -e "\n${GREEN}Instance Configuration:${NC}"
+default_count=${LAST_COUNT:-1}
+read -p "Number of instances to create [${default_count}]: " instance_count
+instance_count=${instance_count:-$default_count}
+
+if ! [[ "$instance_count" =~ ^[0-9]+$ ]] || [ "$instance_count" -lt 1 ]; then
+    echo "Invalid instance count. Must be a positive number."
+    exit 1
+fi
+
 # Additional options with defaults
 echo -e "\n${GREEN}Additional Options:${NC}"
-default_keep=${LAST_KEEP:-"N"}
-read -p "Keep resources after run? (y/N) [${default_keep}]: " keep_resources
-keep_resources=${keep_resources:-$default_keep}
-
-default_test=${LAST_TEST:-"Y"}
-read -p "Run in test mode? (Y/n) [${default_test}]: " test_mode
-test_mode=${test_mode:-$default_test}
+if [ "${deployment_types[$type_index]}" != "test" ]; then
+    default_cleanup=${LAST_CLEANUP:-"N"}
+    read -p "Run cleanup? (y/N) [${default_cleanup}]: " cleanup_requested
+    cleanup_requested=${cleanup_requested:-$default_cleanup}
+fi
 
 # Save current selections as defaults
 cat > "$config_file" << EOF
 LAST_PLAYBOOK=$playbook_num
 LAST_ENV=$env_num
-LAST_KEEP=$keep_resources
-LAST_TEST=$test_mode
+LAST_TYPE=$type_num
+LAST_COUNT=$instance_count
+LAST_CLEANUP=$cleanup_requested
 EOF
 
 # Convert responses to ansible variables
-cleanup_success="true"
-if [[ $keep_resources =~ ^[Yy]$ ]]; then
-    cleanup_success="false"
-fi
-
-test_mode_value="true"
-if [[ $test_mode =~ ^[Nn]$ ]]; then
-    test_mode_value="false"
+cleanup_requested_value="false"
+if [[ $cleanup_requested =~ ^[Yy]$ ]]; then
+    cleanup_requested_value="true"
 fi
 
 # Execute playbook from git root
@@ -118,5 +145,6 @@ cd "$GIT_ROOT"
 echo -e "\n${BLUE}Running playbook with selected options...${NC}"
 ANSIBLE_ROLES_PATH="$roles_dir" ansible-playbook "${playbook_paths[$playbook_index]}" \
     -e "target_env=${environments[$env_index]}" \
-    -e "cleanup_on_success=${cleanup_success}" \
-    -e "test_mode=${test_mode_value}" 
+    -e "deployment_type=${deployment_types[$type_index]}" \
+    -e "instance_count=${instance_count}" \
+    -e "cleanup_requested=${cleanup_requested_value}" 
