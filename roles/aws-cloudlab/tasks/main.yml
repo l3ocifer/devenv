@@ -93,64 +93,18 @@
       AutoRemove: "yes"
   register: test_sg
 
-- name: Launch instance
-  amazon.aws.ec2_instance:
-    name: "{{ environment_prefix }}-{{ target_env }}-{{ ansible_date_time.epoch }}"
-    instance_type: "{{ selected_instance_type }}"
-    security_group: "{{ test_sg.group_id }}"
-    vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
+- name: Create public route table
+  amazon.aws.ec2_vpc_route_table:
+    vpc_id: "{{ test_vpc.vpc.id }}"
     region: "{{ aws_region }}"
-    image_id: "{{ ami_map[target_env] }}"
-    key_name: "{{ ssh_config.key_name }}"
-    private_ip_address: "{{ static_ip_map[target_env].private_ip }}"
-    iam_instance_profile: "SSMInstanceProfile"
-    user_data: |
-      #!/bin/bash
-      apt-get update && apt-get install -y python3-pip
-      pip3 install awscli
-      snap install amazon-ssm-agent --classic
-      systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
-      systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
-    wait: yes
     tags:
-      Name: "{{ environment_prefix }}-{{ target_env }}"
-      Environment: "{{ deployment_mode }}"
-      AutoRemove: "{{ test_mode | default(true) | string }}"
-  register: test_instance
-
-- name: Add instance to inventory
-  ansible.builtin.add_host:
-    name: "{{ test_instance.instances[0].private_ip_address }}"
-    group: test_instances
-    ansible_user: ubuntu
-    ansible_ssh_private_key_file: "{{ ssh_key_path }}"
-    ansible_ssh_common_args: >-
-      -o StrictHostKeyChecking=no
-      -o ProxyCommand='ssh -W %h:%p -i {{ ssh_key_path }} ubuntu@{{ public_subnets.results[0].subnet.id }}'
-
-- name: Wait for SSH
-  ansible.builtin.wait_for:
-    host: "{{ test_instance.instances[0].private_ip_address }}"
-    port: 22
-    timeout: 300
-
-- name: Run role tests
-  ansible.builtin.include_role:
-    name: "{{ item }}"
-  loop: "{{ roles_to_test }}"
-  delegate_to: "{{ test_instance.instances[0].public_ip_address }}"
-
-- name: Verify role deployment
-  ansible.builtin.include_tasks: verify.yml
-  loop: "{{ roles_to_test }}"
-  retries: "{{ verification_retries }}"
-  delay: "{{ verification_delay }}"
-  register: verification_result
-  until: verification_result is success
-
-- name: Cleanup AWS resources
-  ansible.builtin.include_tasks: cleanup.yml
-  when: cleanup_on_success or (not verification_result is success and cleanup_on_failure)
+      Name: "{{ vpc_config.name }}-public-rt"
+      AutoRemove: "yes"
+    subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
+    routes:
+      - dest: "0.0.0.0/0"
+        gateway_id: "{{ test_igw.gateway_id }}"
+  register: public_route_table
 
 - name: Create private route table
   amazon.aws.ec2_vpc_route_table:
@@ -166,18 +120,21 @@
   register: private_route_table
   when: nat_gateway is defined
 
-- name: Create public route table
-  amazon.aws.ec2_vpc_route_table:
-    vpc_id: "{{ test_vpc.vpc.id }}"
+- name: Launch test instance
+  amazon.aws.ec2_instance:
+    name: "{{ environment_prefix }}-{{ target_env }}-{{ ansible_date_time.epoch }}"
+    instance_type: "{{ selected_instance_type }}"
+    security_group: "{{ test_sg.group_id }}"
+    vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
     region: "{{ aws_region }}"
+    image_id: "{{ ami_map[target_env] }}"
+    key_name: "{{ ssh_config.key_name }}"
+    private_ip_address: "{{ static_ip_map[target_env].private_ip }}"
+    iam_instance_profile: "SSMInstanceProfile"
     tags:
-      Name: "{{ vpc_config.name }}-public-rt"
+      Name: "{{ environment_prefix }}-{{ target_env }}"
       AutoRemove: "yes"
-    subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
-    routes:
-      - dest: "0.0.0.0/0"
-        gateway_id: "{{ test_igw.gateway_id }}"
-  register: public_route_table
+  register: test_instance
 
 - name: Create load balancer security group
   amazon.aws.ec2_security_group:
@@ -229,18 +186,6 @@
     state: present
     region: "{{ aws_region }}"
   when: load_balancer_config.enabled
-
-- name: Delete route tables
-  amazon.aws.ec2_vpc_route_table:
-    vpc_id: "{{ test_vpc.vpc.id }}"
-    route_table_id: "{{ item }}"
-    state: absent
-    region: "{{ aws_region }}"
-  loop:
-    - "{{ private_route_table.route_table.id }}"
-    - "{{ public_route_table.route_table.id }}"
-  when: test_vpc is defined
-  ignore_errors: yes
 
 - name: Configure instance SSH settings
   amazon.aws.ec2_instance:

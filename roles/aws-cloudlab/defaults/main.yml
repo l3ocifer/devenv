@@ -9,11 +9,11 @@ aws_subnet_cidr: "10.0.1.0/24"
 
 # Instance Configuration
 instance_type_map:
-  "raspberry_pi":  # Matches RPi 3B specs
+  "legion":  # RPi environment
     type: "t3.micro"
     ram_gb: 1
     vcpus: 1
-  "desktop":  # Matches desktop server specs
+  "alef":  # Desktop environment
     type: "t3.2xlarge"
     ram_gb: 32
     vcpus: 8
@@ -29,7 +29,7 @@ verification_retries: 3
 verification_delay: 30  # seconds between retries
 
 # Target Environment
-target_env: "{{ 'raspberry_pi' if ansible_memtotal_mb <= 1024 else 'desktop' }}"
+target_env: "{{ 'legion' if ansible_memtotal_mb <= 1024 else 'alef' }}"
 
 # SSH Configuration
 ssh_config:
@@ -107,9 +107,9 @@ subnet_config:
 # Static IP Assignments (matching homelab)
 static_ip_map:
   desktop:
-    private_ip: "10.0.3.10"  # In private_1 subnet
+    private_ip: "10.0.1.10"
   raspberry_pi:
-    private_ip: "10.0.3.11"  # In private_1 subnet
+    private_ip: "10.0.1.11"
 
 # NAT Gateway Configuration
 nat_gateway_config:
@@ -138,7 +138,7 @@ security_groups:
         - proto: all
           from_port: -1
           to_port: -1
-          cidr_ip: "10.0.0.0/16"
+          cidr_ip: "{{ vpc_config.cidr }}"
           description: "All internal VPC traffic"
       egress:
         - proto: -1
@@ -182,5 +182,5 @@ load_balancer_config:
 
 # Add AMI mapping
 ami_map:
-  desktop: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS amd64
-  raspberry_pi: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS arm64
+  alef: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS amd64
+  legion: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS arm64

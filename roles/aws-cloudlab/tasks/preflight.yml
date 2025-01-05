@@ -1,4 +1,13 @@
 ---
+- name: Ensure required collections are installed
+  ansible.builtin.command: "ansible-galaxy collection install {{ item }}"
+  loop:
+    - amazon.aws
+    - community.aws
+  changed_when: false
+  failed_when: false
+  run_once: true
+
 - name: Verify AWS credentials
   ansible.builtin.command: aws sts get-caller-identity
   environment:
