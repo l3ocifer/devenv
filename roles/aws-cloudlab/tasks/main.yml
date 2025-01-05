@@ -69,66 +69,29 @@
   amazon.aws.ec2_vpc_nat_gateway_info:
     region: "{{ aws_region }}"
     filters:
-      tag:Name: "{{ nat_gateway_config.name }}"
-      tag:AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
-      state: ["available", "pending"]
       vpc-id: "{{ test_vpc.vpc.id }}"
+      state: ["available", "pending"]
+      "tag:Name": "{{ nat_gateway_config.name }}"
   register: existing_nat_gateways
   when: nat_gateway_config.enabled
 
-- name: Check for existing EIPs
-  amazon.aws.ec2_eip_info:
-    region: "{{ aws_region }}"
-    filters:
-      tag:Name: "{{ nat_gateway_config.name }}-eip"
-      tag:AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
-  register: existing_eips
-  when: nat_gateway_config.enabled
-
-- name: Set NAT gateway facts
-  ansible.builtin.set_fact:
-    nat_gateway_exists: "{{ existing_nat_gateways.result | length > 0 and existing_nat_gateways.result[0].state in ['available', 'pending'] }}"
-    nat_gateway_has_eip: "{{ nat_gateway_exists | bool and existing_nat_gateways.result[0].nat_gateway_addresses | length > 0 }}"
-    existing_eip_id: "{{ existing_nat_gateways.result[0].nat_gateway_addresses[0].allocation_id if (nat_gateway_exists | bool and nat_gateway_has_eip | bool) else (existing_eips.addresses[0].allocation_id if existing_eips.addresses | length > 0 else '') }}"
-  when: nat_gateway_config.enabled
-
-- name: Create NAT Gateway EIP
-  amazon.aws.ec2_eip:
-    region: "{{ aws_region }}"
-    tags:
-      Name: "{{ nat_gateway_config.name }}-eip"
-      Environment: "{{ deployment_mode }}"
-      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
-    in_vpc: true
-    state: present
-  register: nat_eip
-  when: >
-    nat_gateway_config.enabled and
-    not nat_gateway_has_eip | bool and
-    existing_eip_id == ''
-
-- name: Create NAT Gateway
+- name: Create NAT Gateway with new EIP
   amazon.aws.ec2_vpc_nat_gateway:
     state: present
     subnet_id: "{{ public_subnets.results[0].subnet.id }}"
-    allocation_id: "{{ existing_eip_id if (existing_eip_id != '') else nat_eip.allocation_id }}"
     region: "{{ aws_region }}"
     wait: true
     wait_timeout: 600
+    if_exist_do_not_create: true
     tags: "{{ nat_gateway_config.tags }}"
   register: nat_gateway
   when: >
     nat_gateway_config.enabled and
-    not nat_gateway_exists | bool
+    not existing_nat_gateways.result
 
 - name: Set active NAT gateway ID
   ansible.builtin.set_fact:
-    active_nat_gateway_id: >-
-      {{
-        nat_gateway.nat_gateway_id | default(
-          existing_nat_gateways.result[0].nat_gateway_id if nat_gateway_exists | bool else None
-        )
-      }}
+    active_nat_gateway_id: "{{ nat_gateway.nat_gateway_id | default(existing_nat_gateways.result[0].nat_gateway_id) }}"
   when: nat_gateway_config.enabled
 
 - name: Wait for NAT gateway to be available
@@ -201,9 +164,19 @@
     (not existing_route_tables.route_tables or
     not existing_route_tables.route_tables | selectattr('tags.ResourceId', 'equalto', vpc_config.name + '-private-rt-' + test_vpc.vpc.id) | list)
 
-- name: Wait for route propagation
-  ansible.builtin.pause:
-    seconds: 30
+- name: Check route propagation
+  amazon.aws.ec2_vpc_route_table_info:
+    region: "{{ aws_region }}"
+    filters:
+      route-table-id: "{{ item.route_table.id }}"
+  register: route_check
+  until: >
+    route_check.route_tables | length > 0 and
+    route_check.route_tables[0].routes | selectattr('state', 'equalto', 'active') | list | length ==
+    route_check.route_tables[0].routes | length
+  retries: 10
+  delay: 3
+  loop: "{{ [public_route_table, private_route_table] | select('changed') | list }}"
   when: private_route_table.changed or public_route_table.changed
 
 - name: Check for existing instances
