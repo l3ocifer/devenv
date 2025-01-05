@@ -75,6 +75,13 @@
   register: ssm_role
   failed_when: false
 
+- name: Get SSM role policies
+  amazon.aws.iam_role_info:
+    name: "SSMInstanceProfile"
+    manage_attached_policies_info: true
+  register: ssm_role_policies
+  when: ssm_role.iam_roles | length > 0
+
 - name: Create SSM role if missing
   amazon.aws.iam_role:
     name: "SSMInstanceProfile"
@@ -112,8 +119,8 @@
     force: true
   when: 
     - ssm_role.iam_roles | length > 0
-    - ssm_role.iam_roles[0].assume_role_policy_document is not defined or
-      'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' not in (ssm_role.iam_roles[0].attached_policies | map(attribute='policy_arn') | list)
+    - ssm_role_policies.iam_roles[0].attached_policies is not defined or
+      'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' not in (ssm_role_policies.iam_roles[0].attached_policies | map(attribute='policy_arn') | list)
   register: ssm_role_remove
 
 - name: Remove incorrect SSM instance profile
