@@ -8,6 +8,7 @@ aws_vpc_cidr: "10.0.0.0/16"
 aws_subnet_cidr: "10.0.1.0/24"
 
 # Instance Configuration
+instance_count: 1  # Number of instances to maintain
 instance_type_map:
   "legion":  # RPi environment
     type: "t3.micro"
@@ -19,7 +20,9 @@ instance_type_map:
     vcpus: 8
 
 # Test Configuration
-test_timeout_minutes: 30
+test_timeout_minutes: 5  # Reduced timeout for faster feedback
+instance_check_delay: 10  # Seconds between instance checks
+instance_check_retries: 12  # Number of retries for instance checks
 cleanup_on_success: true
 cleanup_on_failure: false  # Keep instance for debugging
 parallel_tests: 1  # Number of simultaneous test instances
@@ -153,7 +156,7 @@ load_balancer_config:
   tags:
     Environment: "{{ deployment_mode }}"
     AutoRemove: "{{ test_mode | default(true) | string }}"
-  subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
+  subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list if not test_mode | default(true) else [] }}"
   security_group_rules:
     - proto: tcp
       from_port: 80
@@ -163,19 +166,7 @@ load_balancer_config:
       from_port: 443
       to_port: 443
       cidr_ip: "0.0.0.0/0"
-  listeners:
-    - port: 80
-      protocol: "HTTP"
-      default_actions:
-        - type: "forward"
-          target_group_arn: "{{ target_group_arn }}"
-    - port: 443
-      protocol: "HTTPS"
-      ssl_policy: "ELBSecurityPolicy-2016-08"
-      certificates: []  # Add certificate ARNs for prod
-      default_actions:
-        - type: "forward"
-          target_group_arn: "{{ target_group_arn }}"
+  listeners: []  # Will be populated in prod mode only
 
 # Add AMI mapping
 ami_map:

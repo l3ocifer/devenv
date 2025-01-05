@@ -51,10 +51,12 @@
   amazon.aws.ec2_eip:
     region: "{{ aws_region }}"
     tags:
-      Name: "{{ vpc_config.name }}-nat-eip"
-      AutoRemove: "yes"
+      Name: "{{ nat_gateway_config.name }}-eip"
+      Environment: "{{ deployment_mode }}"
+      AutoRemove: "{{ test_mode | default(true) | string }}"
     reuse_existing_ip_allowed: true
     in_vpc: true
+    state: present
   register: nat_eip
   when: nat_gateway_config.enabled
 
@@ -64,10 +66,9 @@
     subnet_id: "{{ public_subnets.results[0].subnet.id }}"
     allocation_id: "{{ nat_eip.allocation_id }}"
     region: "{{ aws_region }}"
-    if_exist_do_not_create: true
-    tags:
-      Name: "{{ nat_gateway_config.name }}"
-      AutoRemove: "yes"
+    wait: true
+    wait_timeout: 600
+    tags: "{{ nat_gateway_config.tags }}"
   register: nat_gateway
   when: nat_gateway_config.enabled
 
@@ -107,12 +108,13 @@
     routes:
       - dest: "0.0.0.0/0"
         nat_gateway_id: "{{ nat_gateway.nat_gateway_id }}"
+    lookup: tag:Name
   register: private_route_table
   when: nat_gateway is defined
 
-- name: Launch test instance
+- name: Launch test instances
   amazon.aws.ec2_instance:
-    name: "{{ environment_prefix }}-{{ target_env }}-{{ ansible_date_time.epoch }}"
+    name: "{{ environment_prefix }}-{{ target_env }}-{{ '%02d' | format(item) }}"
     instance_type: "{{ selected_instance_type }}"
     region: "{{ aws_region }}"
     image_id: "{{ ami_map[target_env] }}"
@@ -120,10 +122,63 @@
     iam_instance_profile: "SSMInstanceProfile"
     vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
     security_groups: ["{{ test_sg.group_id }}"]
+    state: present
+    exact_count: "{{ instance_count }}"
+    count_tag:
+      Name: "{{ environment_prefix }}-{{ target_env }}"
+      AutoRemove: "yes"
     tags:
       Name: "{{ environment_prefix }}-{{ target_env }}"
       AutoRemove: "yes"
   register: test_instance
+  loop: "{{ range(1, instance_count + 1) | list }}"
+
+- name: Wait for instances to be ready
+  ansible.builtin.wait_for:
+    timeout: "{{ test_timeout_minutes * 60 }}"
+  register: instance_wait
+  failed_when: false
+  until: instance_wait is success
+  retries: "{{ instance_check_retries }}"
+  delay: "{{ instance_check_delay }}"
+  when: test_instance is changed
+
+- name: Check instance status
+  amazon.aws.ec2_instance_info:
+    instance_ids: "{{ test_instance.results | map(attribute='instance_ids') | flatten }}"
+    region: "{{ aws_region }}"
+  register: instance_status
+  until: instance_status.instances | map(attribute='state.name') | list | unique == ['running']
+  retries: "{{ instance_check_retries }}"
+  delay: "{{ instance_check_delay }}"
+  when: test_instance is changed
+
+- name: Verify SSM connectivity
+  community.aws.aws_ssm_parameter_info:
+    name: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+    region: "{{ aws_region }}"
+  register: ssm_check
+  until: ssm_check is success
+  retries: "{{ instance_check_retries }}"
+  delay: "{{ instance_check_delay }}"
+  when: test_instance is changed
+
+- name: Check SSM instance status
+  amazon.aws.aws_ssm_info:
+    region: "{{ aws_region }}"
+    instance_information_filter:
+      - key: InstanceIds
+        values: "{{ test_instance.results | map(attribute='instance_ids') | flatten | list }}"
+  register: ssm_instance_status
+  until: ssm_instance_status.instance_information | map(attribute='PingStatus') | list | unique == ['Online']
+  retries: "{{ instance_check_retries }}"
+  delay: "{{ instance_check_delay }}"
+  when: test_instance is changed
+
+- name: Warn if instances are not accessible via SSM
+  ansible.builtin.fail:
+    msg: "Warning: Some instances are not accessible via SSM after {{ test_timeout_minutes }} minutes. Check IAM roles and security groups."
+  when: test_instance is changed and (ssm_check.failed is defined or ssm_instance_status.instance_information | length == 0)
 
 - name: Create load balancer security group
   amazon.aws.ec2_security_group:
@@ -135,7 +190,7 @@
     tags:
       AutoRemove: "yes"
   register: lb_sg
-  when: load_balancer_config.enabled
+  when: not test_mode | default(true)
 
 - name: Create target group
   community.aws.elb_target_group:
@@ -153,20 +208,37 @@
     tags:
       AutoRemove: "yes"
   register: target_group
-  when: load_balancer_config.enabled
+  when: not test_mode | default(true)
+
+- name: Set load balancer listeners
+  ansible.builtin.set_fact:
+    lb_listeners:
+      - port: 80
+        protocol: "HTTP"
+        default_actions:
+          - type: "forward"
+            target_group_arn: "{{ target_group.target_group_arn }}"
+      - port: 443
+        protocol: "HTTPS"
+        ssl_policy: "ELBSecurityPolicy-2016-08"
+        certificates: []  # Add certificate ARNs for prod
+        default_actions:
+          - type: "forward"
+            target_group_arn: "{{ target_group.target_group_arn }}"
+  when: not test_mode | default(true)
 
 - name: Create load balancer
   community.aws.elb_application_lb:
     name: "{{ load_balancer_config.name }}"
     security_groups: ["{{ lb_sg.group_id }}"]
     subnets: "{{ load_balancer_config.subnets }}"
-    listeners: "{{ load_balancer_config.listeners }}"
+    listeners: "{{ lb_listeners | default([]) }}"
     state: present
     region: "{{ aws_region }}"
     tags:
       AutoRemove: "yes"
   register: load_balancer
-  when: load_balancer_config.enabled
+  when: not test_mode | default(true)
 
 - name: Register instance with target group
   community.aws.elb_target:
@@ -174,7 +246,7 @@
     target_id: "{{ test_instance.instances[0].instance_id }}"
     state: present
     region: "{{ aws_region }}"
-  when: load_balancer_config.enabled
+  when: not test_mode | default(true)
 
 - name: Configure instance SSH settings
   amazon.aws.ec2_instance:
