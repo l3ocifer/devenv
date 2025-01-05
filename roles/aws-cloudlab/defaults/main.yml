@@ -106,9 +106,9 @@ subnet_config:
 
 # Static IP Assignments (matching homelab)
 static_ip_map:
-  desktop:
+  alef:
     private_ip: "10.0.1.10"
-  raspberry_pi:
+  legion:
     private_ip: "10.0.1.11"
 
 # NAT Gateway Configuration

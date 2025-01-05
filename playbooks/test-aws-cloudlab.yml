@@ -2,7 +2,7 @@
 - name: Test AWS server provisioning
   hosts: localhost
   vars:
-    target_env: "desktop"  # Can be "desktop" or "raspberry_pi"
+    target_env: "legion"  # Can be "legion" or "alef"
     aws_region: "us-east-1"
     roles_to_test: []  # Empty since we're just testing infrastructure
     cleanup_on_failure: false  # Keep instance for debugging if setup fails
