@@ -20,10 +20,10 @@
     aws ssm start-session 
     --target {{ test_instance.instances[0].instance_id }}
     --document-name AWS-StartInteractiveCommand 
-    --parameters command="curl -s https://checkip.amazonaws.com"
+    --parameters command="curl -s https://checkip.amazonaws.com && ping -c 1 8.8.8.8"
   register: connectivity_check
-  retries: 3
-  delay: 10
+  retries: 5
+  delay: 15
   until: connectivity_check.rc == 0
 
 - name: Verify load balancer (prod only)
@@ -33,6 +33,29 @@
       - target_group is defined
       - lb_sg is defined
   when: not test_mode | default(true)
+
+- name: Verify instance state
+  assert:
+    that:
+      - test_instance is defined
+      - test_instance.instances[0].state.name == "running"
+      - test_instance.instances[0].private_ip_address is defined
+    msg: "Instance failed to launch properly"
+
+- name: Verify route tables
+  assert:
+    that:
+      - private_route_table.route_table.routes | selectattr('nat_gateway_id', 'defined') | list | length > 0
+      - public_route_table.route_table.routes | selectattr('gateway_id', 'defined') | list | length > 0
+    msg: "Route tables not configured correctly"
+
+- name: Verify security group configuration
+  assert:
+    that:
+      - test_sg is defined
+      - test_sg.group_id is defined
+      - test_sg.rules | length > 0
+    msg: "Security group configuration is incomplete"
 
 - name: Output verification status
   debug:

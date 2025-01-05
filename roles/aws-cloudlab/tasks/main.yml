@@ -81,19 +81,6 @@
   loop: "{{ subnet_config | dict2items | selectattr('key', 'match', '^private_') | list }}"
   register: private_subnets
 
-- name: Create route table
-  amazon.aws.ec2_vpc_route_table:
-    vpc_id: "{{ test_vpc.vpc.id }}"
-    region: "{{ aws_region }}"
-    tags:
-      Name: "{{ vpc_config.name }}-rt"
-      AutoRemove: "yes"
-    subnets: ["{{ public_subnet.subnet.id }}"]
-    routes:
-      - dest: "0.0.0.0/0"
-        gateway_id: "{{ test_igw.gateway_id }}"
-  register: route_table
-
 - name: Create security group
   amazon.aws.ec2_security_group:
     name: "{{ security_groups.test_instances.name }}"
@@ -165,54 +152,6 @@
   ansible.builtin.include_tasks: cleanup.yml
   when: cleanup_on_success or (not verification_result is success and cleanup_on_failure)
 
-- name: Create private route tables
-  amazon.aws.ec2_vpc_route_table:
-    vpc_id: "{{ test_vpc.vpc.id }}"
-    region: "{{ aws_region }}"
-    tags:
-      Name: "{{ vpc_config.name }}-private-rt"
-      AutoRemove: "yes"
-    subnets: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
-    routes:
-      - dest: "0.0.0.0/0"
-        gateway_id: "{{ nat_gateway.nat_gateway_id }}"
-  register: private_route_table
-  when: nat_gateway_config.enabled
-
-- name: Configure instance SSH settings
-  amazon.aws.ec2_instance:
-    instance_ids: "{{ test_instance.instances[0].instance_id }}"
-    region: "{{ aws_region }}"
-    state: present
-    user_data: |
-      #!/bin/bash
-      useradd -m -s /bin/bash {{ ssh_config.user }}
-      mkdir -p /home/{{ ssh_config.user }}/.ssh
-      echo "{{ lookup('file', ssh_config.public_key_path) }}" > /home/{{ ssh_config.user }}/.ssh/authorized_keys
-      chown -R {{ ssh_config.user }}:{{ ssh_config.user }} /home/{{ ssh_config.user }}/.ssh
-      chmod 700 /home/{{ ssh_config.user }}/.ssh
-      chmod 600 /home/{{ ssh_config.user }}/.ssh/authorized_keys
-      echo "{{ ssh_config.user }} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/{{ ssh_config.user }}
-  when: test_instance is defined
-
-- name: Wait for user setup
-  pause:
-    seconds: 30
-  when: test_instance is defined
-
-- name: Create public route table
-  amazon.aws.ec2_vpc_route_table:
-    vpc_id: "{{ test_vpc.vpc.id }}"
-    region: "{{ aws_region }}"
-    tags:
-      Name: "{{ vpc_config.name }}-public-rt"
-      AutoRemove: "yes"
-    subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
-    routes:
-      - dest: "0.0.0.0/0"
-        gateway_id: "{{ test_igw.gateway_id }}"
-  register: public_route_table
-
 - name: Create private route table
   amazon.aws.ec2_vpc_route_table:
     vpc_id: "{{ test_vpc.vpc.id }}"
@@ -226,6 +165,19 @@
         nat_gateway_id: "{{ nat_gateway.nat_gateway_id }}"
   register: private_route_table
   when: nat_gateway is defined
+
+- name: Create public route table
+  amazon.aws.ec2_vpc_route_table:
+    vpc_id: "{{ test_vpc.vpc.id }}"
+    region: "{{ aws_region }}"
+    tags:
+      Name: "{{ vpc_config.name }}-public-rt"
+      AutoRemove: "yes"
+    subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list }}"
+    routes:
+      - dest: "0.0.0.0/0"
+        gateway_id: "{{ test_igw.gateway_id }}"
+  register: public_route_table
 
 - name: Create load balancer security group
   amazon.aws.ec2_security_group:
@@ -289,3 +241,24 @@
     - "{{ public_route_table.route_table.id }}"
   when: test_vpc is defined
   ignore_errors: yes
+
+- name: Configure instance SSH settings
+  amazon.aws.ec2_instance:
+    instance_ids: "{{ test_instance.instances[0].instance_id }}"
+    region: "{{ aws_region }}"
+    state: present
+    user_data: |
+      #!/bin/bash
+      useradd -m -s /bin/bash {{ ssh_config.user }}
+      mkdir -p /home/{{ ssh_config.user }}/.ssh
+      echo "{{ lookup('file', ssh_config.public_key_path) }}" > /home/{{ ssh_config.user }}/.ssh/authorized_keys
+      chown -R {{ ssh_config.user }}:{{ ssh_config.user }} /home/{{ ssh_config.user }}/.ssh
+      chmod 700 /home/{{ ssh_config.user }}/.ssh
+      chmod 600 /home/{{ ssh_config.user }}/.ssh/authorized_keys
+      echo "{{ ssh_config.user }} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/{{ ssh_config.user }}
+  when: test_instance is defined
+
+- name: Wait for user setup
+  pause:
+    seconds: 30
+  when: test_instance is defined

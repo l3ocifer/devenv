@@ -9,6 +9,7 @@
     test_mode: true  # Indicates this is a test run
     cleanup_on_success: true  # Set to false to keep prod resources
     force_cleanup: false  # Emergency cleanup override
+    ssh_key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal"
 
   pre_tasks:
     - name: Verify AWS credentials

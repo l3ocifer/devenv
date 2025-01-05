@@ -126,7 +126,7 @@ nat_gateway_config:
 
 # Security Configuration
 security_groups:
-  instances:
+  test_instances:
     name: "{{ environment_prefix }}-sg"
     description: "Security group for {{ deployment_mode }} instances"
     rules:
