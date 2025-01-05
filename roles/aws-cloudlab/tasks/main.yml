@@ -47,6 +47,25 @@
   loop: "{{ subnet_config | dict2items | selectattr('key', 'match', '^private_') | list }}"
   register: private_subnets
 
+- name: Check for existing EIPs
+  amazon.aws.ec2_eip_info:
+    region: "{{ aws_region }}"
+    filters:
+      tag:Name: "{{ nat_gateway_config.name }}-eip"
+      tag:AutoRemove: "{{ test_mode | default(true) | string }}"
+  register: existing_eips
+  when: nat_gateway_config.enabled
+
+- name: Check for existing NAT gateways
+  amazon.aws.ec2_vpc_nat_gateway_info:
+    region: "{{ aws_region }}"
+    filters:
+      tag:Name: "{{ nat_gateway_config.name }}"
+      tag:AutoRemove: "{{ test_mode | default(true) | string }}"
+      state: ["available"]
+  register: existing_nat_gateways
+  when: nat_gateway_config.enabled
+
 - name: Create NAT Gateway EIP
   amazon.aws.ec2_eip:
     region: "{{ aws_region }}"
@@ -57,8 +76,21 @@
     reuse_existing_ip_allowed: true
     in_vpc: true
     state: present
+    allocation_id: "{{ existing_eips.addresses[0].allocation_id | default(omit) }}"
   register: nat_eip
-  when: nat_gateway_config.enabled
+  when: nat_gateway_config.enabled and (existing_eips.addresses | length == 0)
+
+- name: Use existing EIP
+  ansible.builtin.set_fact:
+    nat_eip: 
+      allocation_id: "{{ existing_eips.addresses[0].allocation_id }}"
+  when: nat_gateway_config.enabled and (existing_eips.addresses | length > 0)
+
+- name: Use existing NAT gateway
+  ansible.builtin.set_fact:
+    nat_gateway:
+      nat_gateway_id: "{{ existing_nat_gateways.result[0].nat_gateway_id }}"
+  when: nat_gateway_config.enabled and (existing_nat_gateways.result | length > 0)
 
 - name: Create NAT Gateway
   amazon.aws.ec2_vpc_nat_gateway:
@@ -68,9 +100,22 @@
     region: "{{ aws_region }}"
     wait: true
     wait_timeout: 600
+    if_exist_do_not_create: true
     tags: "{{ nat_gateway_config.tags }}"
   register: nat_gateway
-  when: nat_gateway_config.enabled
+  when: nat_gateway_config.enabled and (existing_nat_gateways.result | length == 0)
+
+- name: Wait for NAT gateway to be available
+  amazon.aws.ec2_vpc_nat_gateway_info:
+    region: "{{ aws_region }}"
+    nat_gateway_ids: "{{ nat_gateway.nat_gateway_id | default(existing_nat_gateways.result[0].nat_gateway_id) }}"
+    filters:
+      state: ["available"]
+  register: nat_gateway_status
+  until: nat_gateway_status.result | length > 0
+  retries: 30
+  delay: 10
+  when: nat_gateway_config.enabled and (nat_gateway.changed or existing_nat_gateways.result | length > 0)
 
 - name: Create security group
   amazon.aws.ec2_security_group:
@@ -107,10 +152,18 @@
     subnets: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
     routes:
       - dest: "0.0.0.0/0"
-        nat_gateway_id: "{{ nat_gateway.nat_gateway_id }}"
-    lookup: tag:Name
+        nat_gateway_id: "{{ nat_gateway_status.result[0].nat_gateway_id }}"
   register: private_route_table
-  when: nat_gateway is defined
+  when: nat_gateway_config.enabled and nat_gateway_status.result | length > 0
+
+- name: Check for existing instances
+  amazon.aws.ec2_instance_info:
+    region: "{{ aws_region }}"
+    filters:
+      "tag:Name": "{{ environment_prefix }}-{{ target_env }}"
+      "tag:AutoRemove": "yes"
+      instance-state-name: ["pending", "running"]
+  register: existing_instances
 
 - name: Launch test instances
   amazon.aws.ec2_instance:
@@ -123,15 +176,19 @@
     vpc_subnet_id: "{{ private_subnets.results[0].subnet.id }}"
     security_groups: ["{{ test_sg.group_id }}"]
     state: present
-    exact_count: "{{ instance_count }}"
-    count_tag:
-      Name: "{{ environment_prefix }}-{{ target_env }}"
-      AutoRemove: "yes"
     tags:
       Name: "{{ environment_prefix }}-{{ target_env }}"
       AutoRemove: "yes"
+      Environment: "{{ deployment_mode }}"
   register: test_instance
-  loop: "{{ range(1, instance_count + 1) | list }}"
+  when: existing_instances.instances | length < instance_count
+  loop: "{{ range(existing_instances.instances | length + 1, instance_count + 1) | list }}"
+
+- name: Use existing instances
+  ansible.builtin.set_fact:
+    test_instance:
+      instances: "{{ existing_instances.instances }}"
+  when: existing_instances.instances | length >= instance_count
 
 - name: Wait for instances to be ready
   ansible.builtin.wait_for:

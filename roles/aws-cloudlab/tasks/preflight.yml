@@ -115,23 +115,7 @@
   register: ssm_profile
   when: ssm_role_create is changed or ssm_role.iam_roles | length == 0
 
-- name: Remove incorrect SSM role
-  amazon.aws.iam_role:
-    name: "SSMInstanceProfile"
-    state: absent
-    purge_policies: true
-  when: 
-    - ssm_role.iam_roles | length > 0
-    - not ssm_role_policies.changed
-  register: ssm_role_remove
-
-- name: Remove incorrect SSM instance profile
-  amazon.aws.iam_instance_profile:
-    name: "SSMInstanceProfile"
-    state: absent
-  when: ssm_role_remove is changed
-
-- name: Recreate SSM role if removed
+- name: Update SSM role policies if needed
   amazon.aws.iam_role:
     name: "SSMInstanceProfile"
     state: present
@@ -150,11 +134,4 @@
       }
     managed_policies:
       - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  when: ssm_role_remove is changed
-
-- name: Recreate SSM instance profile if removed
-  amazon.aws.iam_instance_profile:
-    name: "SSMInstanceProfile"
-    state: present
-    role: "SSMInstanceProfile"
-  when: ssm_role_remove is changed 
+  when: ssm_role.iam_roles | length > 0 and not ssm_role_policies.changed 
