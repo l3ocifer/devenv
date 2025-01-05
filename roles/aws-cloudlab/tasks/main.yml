@@ -20,7 +20,7 @@
     required_vcpus: "{{ instance_type_map[target_env].vcpus }}"
 
 - name: Create AWS VPC for testing
-  amazon.aws.ec2_vpc:
+  amazon.aws.ec2_vpc_net:
     name: "{{ vpc_config.name }}"
     cidr_block: "{{ vpc_config.cidr }}"
     region: "{{ aws_region }}"
@@ -149,7 +149,7 @@
   when: load_balancer_config.enabled
 
 - name: Create target group
-  amazon.aws.elb_target_group:
+  community.aws.elb_target_group:
     name: "{{ load_balancer_config.name }}-tg"
     protocol: "HTTP"
     port: 80
@@ -167,7 +167,7 @@
   when: load_balancer_config.enabled
 
 - name: Create load balancer
-  amazon.aws.elb_application_lb:
+  community.aws.elb_application_lb:
     name: "{{ load_balancer_config.name }}"
     security_groups: ["{{ lb_sg.group_id }}"]
     subnets: "{{ load_balancer_config.subnets }}"
@@ -180,7 +180,7 @@
   when: load_balancer_config.enabled
 
 - name: Register instance with target group
-  amazon.aws.elb_target:
+  community.aws.elb_target:
     target_group_arn: "{{ target_group.target_group_arn }}"
     target_id: "{{ test_instance.instances[0].instance_id }}"
     state: present

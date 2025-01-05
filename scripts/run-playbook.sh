@@ -14,6 +14,12 @@ fi
 
 playbooks_dir="$GIT_ROOT/playbooks"
 roles_dir="$GIT_ROOT/roles"
+config_file="$GIT_ROOT/.playbook-runner.conf"
+
+# Load last run configuration if exists
+if [ -f "$config_file" ]; then
+    source "$config_file"
+fi
 
 # Scan playbooks directory
 playbook_names=()
@@ -50,8 +56,10 @@ for i in "${!playbook_names[@]}"; do
     echo "$((i+1))) ${playbook_names[$i]}"
 done
 
-# Get playbook selection
-read -p "Select playbook number: " playbook_num
+# Get playbook selection with default
+default_playbook=${LAST_PLAYBOOK:-1}
+read -p "Select playbook number [${default_playbook}]: " playbook_num
+playbook_num=${playbook_num:-$default_playbook}
 playbook_index=$((playbook_num-1))
 
 if [ -z "${playbook_names[$playbook_index]}" ]; then
@@ -65,8 +73,10 @@ for i in "${!environments[@]}"; do
     echo "$((i+1))) ${environments[$i]}"
 done
 
-# Get environment selection
-read -p "Select environment number: " env_num
+# Get environment selection with default
+default_env=${LAST_ENV:-1}
+read -p "Select environment number [${default_env}]: " env_num
+env_num=${env_num:-$default_env}
 env_index=$((env_num-1))
 
 if [ -z "${environments[$env_index]}" ]; then
@@ -74,10 +84,23 @@ if [ -z "${environments[$env_index]}" ]; then
     exit 1
 fi
 
-# Additional options
+# Additional options with defaults
 echo -e "\n${GREEN}Additional Options:${NC}"
-read -p "Keep resources after run? (y/N): " keep_resources
-read -p "Run in test mode? (Y/n): " test_mode
+default_keep=${LAST_KEEP:-"N"}
+read -p "Keep resources after run? (y/N) [${default_keep}]: " keep_resources
+keep_resources=${keep_resources:-$default_keep}
+
+default_test=${LAST_TEST:-"Y"}
+read -p "Run in test mode? (Y/n) [${default_test}]: " test_mode
+test_mode=${test_mode:-$default_test}
+
+# Save current selections as defaults
+cat > "$config_file" << EOF
+LAST_PLAYBOOK=$playbook_num
+LAST_ENV=$env_num
+LAST_KEEP=$keep_resources
+LAST_TEST=$test_mode
+EOF
 
 # Convert responses to ansible variables
 cleanup_success="true"

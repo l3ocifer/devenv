@@ -16,7 +16,7 @@
     msg: "Invalid target environment: {{ target_env }}"
 
 - name: Check AWS service quotas
-  amazon.aws.aws_service_quota_info:
+  amazon.aws.servicequotas_info:
     service_code: ec2
     quota_code: L-1216C47A  # Running On-Demand instances
     region: "{{ aws_region }}"
@@ -66,14 +66,14 @@
       register: existing_key 
 
 - name: Verify NAT Gateway quota
-  amazon.aws.aws_service_quota_info:
+  amazon.aws.servicequotas_info:
     service_code: vpc
     quota_code: L-FE5A380F  # NAT Gateways per AZ
     region: "{{ aws_region }}"
   register: nat_quota_check
 
 - name: Verify EIP quota
-  amazon.aws.aws_service_quota_info:
+  amazon.aws.servicequotas_info:
     service_code: ec2
     quota_code: L-0263D0A3  # EC2-VPC Elastic IPs
     region: "{{ aws_region }}"
