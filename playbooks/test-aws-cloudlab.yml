@@ -1,88 +1,33 @@
 ---
 - name: Test AWS server provisioning
   hosts: localhost
-  vars:
-    target_env: "legion"  # Can be "legion" or "alef"
-    aws_region: "us-east-1"
-    roles_to_test: []  # Empty since we're just testing infrastructure
-    cleanup_on_failure: false  # Keep instance for debugging if setup fails
-    test_mode: true  # Indicates this is a test run
-    cleanup_on_success: true  # Set to false to keep prod resources
-    force_cleanup: false  # Emergency cleanup override
-    ssh_key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal"
+  connection: local
+  gather_facts: true
 
   pre_tasks:
-    - name: Install required AWS collections
-      command: ansible-galaxy collection install {{ item }} --force --upgrade
-      loop:
-        - amazon.aws
-        - community.aws
-      changed_when: false
-      run_once: true
-      environment:
-        ANSIBLE_GALAXY_IGNORE_CERTS: "true"  # Handle potential cert issues
-
     - name: Verify AWS credentials
-      command: aws sts get-caller-identity
+      ansible.builtin.command: aws sts get-caller-identity
       changed_when: false
       register: aws_check
       failed_when: aws_check.rc != 0
 
-    - name: Verify SSH key requirements
-      stat:
-        path: "{{ item }}"
-      loop:
-        - "~/.ssh/leo-personal"
-        - "~/.ssh/leo-personal.pub"
-      register: ssh_check
-      failed_when: not ssh_check.stat.exists
+  tasks:
+    - name: Set AWS region
+      ansible.builtin.set_fact:
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
 
-  roles:
-    - role: aws-cloudlab
-
-  post_tasks:
-    - name: Verify server accessibility and internet access
-      ansible.builtin.shell: |
-        aws ssm describe-instance-information --filters "Key=InstanceIds,Values={{ item }}" --region {{ aws_region }} --output json | grep -q "{{ item }}" &&
-        aws ssm send-command \
-          --instance-ids "{{ item }}" \
-          --document-name "AWS-RunShellScript" \
-          --parameters 'commands=["apt update"]' \
-          --region {{ aws_region }} \
-          --output text
-      register: final_check
-      until: final_check is success
-      retries: "{{ instance_check_retries }}"
-      delay: "{{ instance_check_delay }}"
-      loop: "{{ (test_instance.results | map(attribute='instance_ids') | flatten | list) if test_instance.results is defined else [] }}"
-      changed_when: false
-
-    - name: Test SSH connection as l3o user
-      command: >
-        ssh -o StrictHostKeyChecking=no
-        -o ProxyCommand='ssh -W %h:%p -i ~/.ssh/leo-personal ubuntu@{{ bastion_instance.public_ip_address }}'
-        -i ~/.ssh/leo-personal
-        l3o@{{ item }}
-        "echo 'SSH connection successful' && curl -s http://checkip.amazonaws.com"
-      register: ssh_test
-      changed_when: false
-      failed_when: ssh_test.rc != 0
-      loop: "{{ (test_instance.results | map(attribute='private_ip_address') | flatten | list) if test_instance.results is defined else [] }}"
-      when: not test_mode | default(true)
-
-    - name: Cleanup notification
-      ansible.builtin.debug:
-        verbosity: 0
-        msg: >
-          Infrastructure will be cleaned up automatically since test_mode=true.
-          Set cleanup_on_success=false to keep resources.
-      when: test_mode | default(true) and cleanup_on_success | default(true)
-
-    - name: Perform cleanup in test mode
-      include_role:
+    - name: Perform cleanup
+      ansible.builtin.include_role:
         name: aws-cloudlab
         tasks_from: cleanup
-      when: test_mode | default(true) and cleanup_on_success | default(true)
+      when: cleanup_enabled | bool
+      tags: cleanup
       vars:
         force_cleanup: true
-        skip_target_group: "{{ test_mode | default(true) }}"  # Skip target group cleanup in test mode 
+        deployment_type: test
+
+    - name: Run AWS cloudlab role
+      ansible.builtin.include_role:
+        name: aws-cloudlab
+      when: not cleanup_enabled | bool
+      tags: deploy 
