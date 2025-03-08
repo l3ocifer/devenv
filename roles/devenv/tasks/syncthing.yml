@@ -147,7 +147,7 @@
 
 - name: Create Syncthing config
   ansible.builtin.template:
-    src: "syncthing-config.xml.j2"
+    src: "syncthing_config.xml.j2"
     dest: "~/.config/syncthing/config.xml"
     mode: '0644'
   tags: ['sync']

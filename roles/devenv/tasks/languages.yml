@@ -186,3 +186,49 @@
     line: 'export GOPATH="{{ ansible_env.HOME }}/go"'
     create: yes
   tags: ['languages']
+
+# .NET SDK Setup
+- name: Install .NET SDK (macOS)
+  community.general.homebrew:
+    name: dotnet-sdk
+    state: present
+  when: is_macos
+  tags: ['languages']
+
+- name: Install .NET SDK (Linux)
+  block:
+    - name: Add Microsoft repository key
+      ansible.builtin.apt_key:
+        url: https://packages.microsoft.com/keys/microsoft.asc
+        state: present
+      when: is_linux
+      
+    - name: Add Microsoft package repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ 'arm64' if ansible_architecture == 'arm64' else 'amd64' }}] https://packages.microsoft.com/repos/microsoft-{{ ansible_distribution | lower }}-{{ ansible_distribution_version }}-prod {{ ansible_distribution_release }} main"
+        state: present
+        filename: microsoft-prod
+      when: is_linux
+      
+    - name: Install .NET SDK
+      ansible.builtin.apt:
+        name: dotnet-sdk-{{ languages.dotnet.version }}
+        state: present
+        update_cache: yes
+      when: is_linux
+  when: is_linux
+  tags: ['languages']
+
+- name: Ensure .NET config directory exists
+  ansible.builtin.file:
+    path: "~/.config/dotnet"
+    state: directory
+    mode: '0755'
+  tags: ['languages']
+
+- name: Add .NET to PATH
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: 'export DOTNET_ROOT="{{ ansible_env.HOME }}/.dotnet"'
+    create: yes
+  tags: ['languages']
